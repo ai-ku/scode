@@ -1,3 +1,6 @@
+#ifndef __FOREACH_H__
+#define __FOREACH_H__
+
 #include <stdio.h>
 #include <glib.h>
 
@@ -39,3 +42,4 @@ FILE* gx_fopen (const char *path, const char *mode);
        tok != NULL; tok = strtok(NULL," \t\n\r\f\v"))
 
 
+#endif
