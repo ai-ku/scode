@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <glib.h>
+#include <errno.h>
 
 /* FOREACH: C needs some good looping macros: */
 
@@ -26,12 +27,14 @@
   for (register char var, *_p = (str);\
        (var = *_p) != 0; _p++)
 
-FILE* gx_fopen (const char *path, const char *mode);
-#define LINE 1024
+#define LINE (1<<16)
 
 #define foreach_line(str, fname)\
-  for (FILE *_fp = (((fname) == NULL) ? stdin : gx_fopen((fname), "r"));\
-       (_fp != NULL); _fp = ((fname) == NULL) ? NULL : (fclose(_fp), NULL))\
+  for (FILE *_fp = (((fname) == NULL) ? stdin : fopen((fname), "r"));\
+       ((_fp != NULL) ||\
+        ((errno != 0) &&\
+         (perror(fname), 0)));\
+       _fp = ((fname) == NULL) ? NULL : (fclose(_fp), NULL))\
   for (char str[LINE];\
        ((str[LINE - 1] = -1) &&\
         fgets(str, LINE, _fp) &&\
