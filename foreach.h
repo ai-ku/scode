@@ -2,12 +2,13 @@
 #define __FOREACH_H__
 
 #include <stdio.h>
+#include <string.h>
 #include <glib.h>
 
 /* FOREACH: C needs some good looping macros: */
 
 #define foreach(type, var, array)\
-  for (register type var, *_p = (type*)(array)->pdata;\
+  for (register type (var), *_p = (type*)(array)->pdata;\
        _p != NULL; _p = NULL)\
   for (register int _i = 0, _l = (array)->len;\
        (_i < _l) && ((var = _p[_i]) || 1); _i++)
@@ -38,8 +39,8 @@ FILE* gx_fopen (const char *path, const char *mode);
          (g_error("Line too long: %s", str), 0))); )
 
 #define foreach_token(tok, str)\
-  for (register char *tok = strtok((str), " \t\n\r\f\v");\
-       tok != NULL; tok = strtok(NULL," \t\n\r\f\v"))
+  for (register char *(tok) = strtok((str), " \t\n\r\f\v");\
+       (tok) != NULL; (tok) = strtok(NULL," \t\n\r\f\v"))
 
 
 #endif
