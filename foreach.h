@@ -5,6 +5,7 @@
 #include <string.h>
 #include <glib.h>
 #include <errno.h>
+#include <stdlib.h>
 
 /* FOREACH: C needs some good looping macros: */
 
@@ -30,10 +31,9 @@
 #define LINE (1<<16)
 
 #define foreach_line(str, fname)\
+  errno = 0;\
   for (FILE *_fp = (((fname) == NULL) ? stdin : fopen((fname), "r"));\
-       ((_fp != NULL) ||\
-        ((errno != 0) &&\
-         (perror(fname), 0)));\
+       (_fp != NULL) || (errno && (perror(fname), exit(errno), 0));\
        _fp = ((fname) == NULL) ? NULL : (fclose(_fp), NULL))\
   for (char str[LINE];\
        ((str[LINE - 1] = -1) &&\
@@ -47,3 +47,4 @@
 
 
 #endif
+
