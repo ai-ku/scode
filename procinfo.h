@@ -8,6 +8,9 @@ extern int procinfo_cnt;
 		((++procinfo_cnt) && ((n)<32)) ? fputc('.', stderr) :\
 		((procinfo_cnt)%((n)>>5) == 0) ? fputc('.', stderr) : 0)
 
+unsigned long memory();
+unsigned long runtime();
+
 void my_log_func(const gchar *log_domain,
 		 GLogLevelFlags log_level,
 		 const gchar *message,
