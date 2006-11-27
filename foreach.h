@@ -30,16 +30,31 @@
 
 #define LINE (1<<16)
 
+extern FILE *popen (__const char *__command, __const char *__modes);
+extern int pclose (FILE *__stream);
+
+static FILE *_myopen(const char *fname) {
+  if (NULL == fname) return stdin;
+  else if (*fname == '|') return popen((fname)+1, "r");
+  else return fopen(fname, "r");
+}
+static FILE *_myclose(const char *fname, FILE *fp) {
+  if (NULL == fname) return NULL;
+  else if (*fname == '|') pclose(fp);
+  else fclose(fp);
+  return NULL;
+}
+
 #define foreach_line(str, fname)\
-  errno = 0;\
-  for (FILE *_fp = (((fname) == NULL) ? stdin : fopen((fname), "r"));\
-       (_fp != NULL) || (errno && (perror(fname), exit(errno), 0));\
-       _fp = ((fname) == NULL) ? NULL : (fclose(_fp), NULL))\
+  errno = 0; \
+  for (FILE *_fp = _myopen(fname); \
+       (_fp != NULL) || (errno && (perror(fname), exit(errno), 0)); \
+       _fp = _myclose(fname, _fp)) \
   for (char str[LINE];\
        ((str[LINE - 1] = -1) &&\
         fgets(str, LINE, _fp) &&\
         ((str[LINE - 1] != 0) ||\
-         (g_error("Line too long: %s", str), 0))); )
+         (perror("Line too long"), exit(-1), 0))); )
 
 #define foreach_token(tok, str)\
   for (register char *(tok) = strtok((str), " \t\n\r\f\v");\
