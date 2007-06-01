@@ -60,6 +60,9 @@ static FILE *_myclose(const char *fname, FILE *fp) {
   for (register char *(tok) = strtok((str), " \t\n\r\f\v");\
        (tok) != NULL; (tok) = strtok(NULL," \t\n\r\f\v"))
 
+#define foreach_token3(tok, str, sep)\
+  for (register char *(tok) = strtok((str), (sep));\
+       (tok) != NULL; (tok) = strtok(NULL, (sep)))
 
 #endif
 
