@@ -56,13 +56,15 @@ static FILE *_myclose(const char *fname, FILE *fp) {
         ((str[LINE - 1] != 0) ||\
          (perror("Line too long"), exit(-1), 0))); )
 
+char *strtok_r(char *s, const char *delim, char **ptrptr);
+
 #define foreach_token(tok, str)\
-  for (register char *(tok) = strtok((str), " \t\n\r\f\v");\
-       (tok) != NULL; (tok) = strtok(NULL," \t\n\r\f\v"))
+  for (char *_ptr = NULL, *(tok) = strtok_r((str), " \t\n\r\f\v", &_ptr);\
+       (tok) != NULL; (tok) = strtok_r(NULL," \t\n\r\f\v", &_ptr))
 
 #define foreach_token3(tok, str, sep)\
-  for (register char *(tok) = strtok((str), (sep));\
-       (tok) != NULL; (tok) = strtok(NULL, (sep)))
+  for (char *_ptr = NULL, *(tok) = strtok_r((str), (sep), &_ptr);\
+       (tok) != NULL; (tok) = strtok_r(NULL, (sep), &_ptr))
 
 #endif
 
