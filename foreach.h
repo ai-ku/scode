@@ -35,14 +35,18 @@ extern int pclose (FILE *__stream);
 
 #define LINE (1<<16)
 
-#define _myopen(f) ((NULL==(f))?stdin:(*(f)=='|')?popen((f)+1,"r"):fopen((f),"r"))
-#define _myclose(f,fp) ((NULL==(f))?NULL:(*(f)=='|')?pclose(fp):fclose(fp))
+/* Use the empty string to represent stdin */
+/* Use "|cmd" to represent the output of a command */
+/* Use path string for a regular file */
+
+#define _myopen(f) ((*(f)==0)?stdin:(*(f)=='|')?popen((f)+1,"r"):fopen((f),"r"))
+#define _myclose(f,fp) ((*(f)==0)?0:(*(f)=='|')?pclose(fp):fclose(fp))
 
 #define foreach_line(str, fname)\
   errno = 0; \
   for (FILE *_fp = _myopen(fname); \
        (_fp != NULL) || (errno && (perror(fname), exit(errno), 0)); \
-       _fp = _myclose(fname, _fp)) \
+       _fp = (_myclose(fname, _fp), NULL)) \
   for (char str[LINE];\
        ((str[LINE - 1] = -1) &&\
         fgets(str, LINE, _fp) &&\
