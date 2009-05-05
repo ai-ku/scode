@@ -1,3 +1,5 @@
+/* $Id$ */
+
 #ifndef __FOREACH_H__
 #define __FOREACH_H__
 
@@ -6,6 +8,9 @@
 #include <glib.h>
 #include <errno.h>
 #include <stdlib.h>
+extern char *strtok_r(char *s, const char *delim, char **ptrptr);
+extern FILE *popen (__const char *__command, __const char *__modes);
+extern int pclose (FILE *__stream);
 
 /* FOREACH: C needs some good looping macros: */
 
@@ -30,20 +35,8 @@
 
 #define LINE (1<<16)
 
-extern FILE *popen (__const char *__command, __const char *__modes);
-extern int pclose (FILE *__stream);
-
-static FILE *_myopen(const char *fname) {
-  if (NULL == fname) return stdin;
-  else if (*fname == '|') return popen((fname)+1, "r");
-  else return fopen(fname, "r");
-}
-static FILE *_myclose(const char *fname, FILE *fp) {
-  if (NULL == fname) return NULL;
-  else if (*fname == '|') pclose(fp);
-  else fclose(fp);
-  return NULL;
-}
+#define _myopen(f) ((NULL==(f))?stdin:(*(f)=='|')?popen((f)+1,"r"):fopen((f),"r"))
+#define _myclose(f,fp) ((NULL==(f))?NULL:(*(f)=='|')?pclose(fp):fclose(fp))
 
 #define foreach_line(str, fname)\
   errno = 0; \
@@ -55,8 +48,6 @@ static FILE *_myclose(const char *fname, FILE *fp) {
         fgets(str, LINE, _fp) &&\
         ((str[LINE - 1] != 0) ||\
          (perror("Line too long"), exit(-1), 0))); )
-
-char *strtok_r(char *s, const char *delim, char **ptrptr);
 
 #define foreach_token(tok, str)\
   for (char *_ptr = NULL, *(tok) = strtok_r((str), " \t\n\r\f\v", &_ptr);\

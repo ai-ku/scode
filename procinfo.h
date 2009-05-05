@@ -1,5 +1,8 @@
+/* $Id$ */
+
 #ifndef __PROCINFO_H__
 #define __PROCINFO_H__
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
