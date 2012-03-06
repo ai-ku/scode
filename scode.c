@@ -11,11 +11,11 @@ const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
 
 #define NTOK 2		      /* number of tokens per input line */
-#define NITER 5		      /* how many times to go over the data */
+#define NITER 50	      /* how many times to go over the data */
 #define NDIM 25		      /* dimensionality of the embedding */
 #define PHI0 100.0	      /* learning rate parameter */
 #define NU0 0.1		      /* learning rate parameter */
-#define Z 0.146		      /* partition function approximation */
+#define Z 0.154		      /* partition function approximation */
 
 typedef GQuark Tuple[NTOK];
 
@@ -24,14 +24,14 @@ guint *cnt[NTOK];
 float *frq[NTOK];
 svec *vec[NTOK];
 GQuark qmax;
-float maxmove;
 
 int main(int argc, char **argv);
 void init_rng();
 void free_rng();
 void init_data();
 void free_data();
-void svec_update(Tuple t);
+float update_tuple(Tuple t);
+float update_svec(svec x, svec y, svec y2, float xy2, float nx);
 double logL();
 double calcZ();
 
@@ -43,14 +43,15 @@ int main(int argc, char **argv) {
   init_data();
   g_message("Read %d tuples %d uniq tokens", data->len, qmax);
   g_message("logL=%g", logL());
-  g_message("Z=%g (approx %g)", calcZ(), Z);
+  /* g_message("Z=%g (approx %g)", calcZ(), Z); */
   for (int iter = 0; iter < NITER; iter++) {
     g_message("Iteration %d", iter);
-    maxmove = 0;
+    float maxmove = 0;
     for (int di = 0; di < data->len; di++) {
-      svec_update(g_array_index(data, Tuple, di));
+      float dx = update_tuple(g_array_index(data, Tuple, di));
+      if (dx > maxmove) maxmove = dx;
     }
-    g_message("maxmove=%g", maxmove);
+    g_message("maxmove=%g", sqrt(maxmove));
     g_message("logL=%g", logL());
   }
   g_message("Z=%g (approx %g)", calcZ(), Z);
@@ -94,8 +95,7 @@ double calcZ() {
   return z;
 }
 
-void svec_update(Tuple t) {
-  float d;
+float update_tuple(Tuple t) {
   GQuark x1 = t[0];
   GQuark y1 = t[1];
   guint cx = cnt[0][x1]++;
@@ -104,10 +104,6 @@ void svec_update(Tuple t) {
   float ny = NU0 * (PHI0 / (PHI0 + cy));
   svec vx1 = vec[0][x1];
   svec vy1 = vec[1][y1];
-  d = svec_pull(vx1, vy1, nx);
-  if (d > maxmove) maxmove = d;
-  d = svec_pull(vy1, vx1, ny);
-  if (d > maxmove) maxmove = d;
   guint rx = gsl_rng_uniform_int(rng_R, data->len);
   GQuark x2 = g_array_index(data, Tuple, rx)[0];
   guint ry = gsl_rng_uniform_int(rng_R, data->len);
@@ -115,13 +111,26 @@ void svec_update(Tuple t) {
   svec vx2 = vec[0][x2];
   svec vy2 = vec[1][y2];
   float x1y2 = svec_sqdist(vx1, vy2);
-  float x2y1 = svec_sqdist(vx2, vy1);
-  d = svec_push(vx1, vy2, nx * exp(-x1y2) / Z);
-  if (d > maxmove) maxmove = d;
-  d = svec_push(vy1, vx2, ny * exp(-x2y1) / Z);
-  if (d > maxmove) maxmove = d;
+  float y1x2 = svec_sqdist(vx2, vy1);
+  float dx = update_svec(vx1, vy1, vy2, x1y2, nx);
+  float dy = update_svec(vy1, vx1, vx2, y1x2, ny);
+  return (dx > dy ? dx : dy);
 }
 
+float update_svec(svec x, svec y, svec y2, float xy2, float nx) {
+  float sumsq = 0;
+  for (int i = x->size - 1; i >= 0; i--) {
+    float xi = svec_get(x, i);
+    float yi = svec_get(y, i);
+    float y2i = svec_get(y2, i);
+    float move = nx * (yi - xi + (xi - y2i) * exp(-xy2) / Z);
+    svec_set(x, i, xi + move);
+    sumsq += move * move;
+  }
+  svec_normalize(x);
+  return sumsq;
+}
+  
 void init_data() {
   Tuple t;
   qmax = 0;
