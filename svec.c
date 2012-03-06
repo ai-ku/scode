@@ -2,10 +2,6 @@
 #include "svec.h"
 #include "rng.h"
 
-#define svec_get gsl_vector_float_get
-#define svec_set gsl_vector_float_set
-#define svec_scale gsl_vector_float_scale
-
 float svec_sqdist(svec x, svec y) {
   float sqdist = 0;
   for (int i = x->size - 1; i >= 0; i--) {
