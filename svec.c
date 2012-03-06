@@ -1,6 +1,14 @@
+#include <stdio.h>
 #include <math.h>
 #include "svec.h"
 #include "rng.h"
+
+void svec_print(svec x) {
+  for (int i = 0; i < x->size; i++) {
+    if (i > 0) printf("\t");
+    printf("%.6f", svec_get(x, i));
+  }
+}
 
 float svec_sqdist(svec x, svec y) {
   float sqdist = 0;
@@ -15,7 +23,7 @@ float svec_sqdist(svec x, svec y) {
 
 void svec_randomize(svec x) {
   for (int i = x->size - 1; i >= 0; i--) {
-    svec_set(x, i, gsl_rng_uniform(rng_R));
+    svec_set(x, i, -1 + 2 * gsl_rng_uniform(rng_R));
   }
   svec_normalize(x);
 }

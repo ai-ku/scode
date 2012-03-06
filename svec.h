@@ -12,6 +12,7 @@ typedef gsl_vector_float *svec;
 #define svec_set gsl_vector_float_set
 #define svec_scale gsl_vector_float_scale
 
+void svec_print(svec x);
 void svec_randomize(svec x);
 void svec_normalize(svec x);
 float svec_pull(svec x, svec y, float d);

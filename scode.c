@@ -11,7 +11,7 @@ const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
 
 #define NTOK 2		      /* number of tokens per input line */
-#define NITER 50	      /* how many times to go over the data */
+#define NITER 10	      /* how many times to go over the data */
 #define NDIM 25		      /* dimensionality of the embedding */
 #define PHI0 100.0	      /* learning rate parameter */
 #define NU0 0.1		      /* learning rate parameter */
@@ -54,6 +54,16 @@ int main(int argc, char **argv) {
     g_message("maxmove=%g", sqrt(maxmove));
     g_message("logL=%g", logL());
   }
+  for (guint q = 1; q <= qmax; q++) {
+    g_assert(vec[0][q] != NULL);
+    g_assert(vec[1][q] != NULL);
+    printf("%s\t", g_quark_to_string(q));
+    svec_print(vec[0][q]);
+    printf("\t");
+    svec_print(vec[1][q]);
+    printf("\n");
+  }
+  fflush(stdout);
   g_message("Z=%g (approx %g)", calcZ(), Z);
   free_data();
   free_rng();
@@ -78,12 +88,12 @@ double logL() {
 
 double calcZ() {
   double z = 0;
-  for (guint x = 0; x <= qmax; x++) {
+  for (guint x = 1; x <= qmax; x++) {
     if (x % 1000 == 0) fprintf(stderr, ".");
     if (frq[0][x] == 0) continue;
     float px = frq[0][x];
     svec vx = vec[0][x];
-    for (guint y = 0; y <= qmax; y++) {
+    for (guint y = 1; y <= qmax; y++) {
       if (frq[1][y] == 0) continue;
       float py = frq[1][y];
       svec vy = vec[1][y];
@@ -118,17 +128,21 @@ float update_tuple(Tuple t) {
 }
 
 float update_svec(svec x, svec y, svec y2, float xy2, float nx) {
-  float sumsq = 0;
+  float sum_move2 = 0;
+  float sum_x2 = 0;
+  float exy2z = exp(-xy2) / Z;
   for (int i = x->size - 1; i >= 0; i--) {
     float xi = svec_get(x, i);
     float yi = svec_get(y, i);
     float y2i = svec_get(y2, i);
-    float move = nx * (yi - xi + (xi - y2i) * exp(-xy2) / Z);
-    svec_set(x, i, xi + move);
-    sumsq += move * move;
+    float move = nx * (yi - xi + exy2z * (xi - y2i));
+    xi += move;
+    svec_set(x, i, xi);
+    sum_move2 += move * move;
+    sum_x2 += xi * xi;
   }
-  svec_normalize(x);
-  return sumsq;
+  svec_scale(x, 1 / sqrt(sum_x2));
+  return sum_move2;
 }
   
 void init_data() {
