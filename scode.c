@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <glib.h>
 #include <math.h>
 #include <gsl/gsl_vector.h>
@@ -11,11 +12,13 @@ const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
 
 #define NTOK 2		      /* number of tokens per input line */
-#define NITER 10	      /* how many times to go over the data */
-#define NDIM 25		      /* dimensionality of the embedding */
 #define PHI0 100.0	      /* learning rate parameter */
 #define NU0 0.1		      /* learning rate parameter */
-#define Z 0.154		      /* partition function approximation */
+int NITER = 20;		      /* how many times to go over the data */
+int NDIM = 25;		      /* dimensionality of the embedding */
+double Z = 0.166;	      /* partition function approximation */
+int CALCZ = 0;		      /* whether to calculate real Z */
+int VMERGE = 0;		      /* whether to merge vectors at output */
 
 typedef GQuark Tuple[NTOK];
 
@@ -38,12 +41,25 @@ double calcZ();
 int main(int argc, char **argv) {
   g_message_init();
   g_message("hello");
+
+  int opt;
+  while((opt = getopt(argc, argv, "i:d:z:c2")) != -1) {
+    switch(opt) {
+    case 'i': NITER = atoi(optarg); break;
+    case 'd': NDIM = atoi(optarg); break;
+    case 'z': Z = atof(optarg); break;
+    case 'c': CALCZ = 1; break;
+    case '2': VMERGE = 1; break;
+    default: g_error("Usage: scode [options] < input");
+    }
+  }
+
   init_rng();
   g_message("Reading data");
   init_data();
   g_message("Read %d tuples %d uniq tokens", data->len, qmax);
   g_message("logL=%g", logL());
-  /* g_message("Z=%g (approx %g)", calcZ(), Z); */
+  if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
   for (int iter = 0; iter < NITER; iter++) {
     g_message("Iteration %d", iter);
     float maxmove = 0;
@@ -54,17 +70,26 @@ int main(int argc, char **argv) {
     g_message("maxmove=%g", sqrt(maxmove));
     g_message("logL=%g", logL());
   }
+  int nz = 0;
   for (guint q = 1; q <= qmax; q++) {
-    g_assert(vec[0][q] != NULL);
-    g_assert(vec[1][q] != NULL);
-    printf("%s\t", g_quark_to_string(q));
+    if (vec[0][q] != NULL) nz++;
+  }
+  printf("%d\t%d\n", nz, VMERGE ? NTOK * NDIM : NDIM);
+  for (guint q = 1; q <= qmax; q++) {
+    if (vec[0][q] == NULL) continue;
+    printf("%s\t%g\t", g_quark_to_string(q), frq[0][q]);
     svec_print(vec[0][q]);
-    printf("\t");
-    svec_print(vec[1][q]);
+    if (VMERGE) {
+      for (guint t = 1; t < NTOK; t++) {
+	g_assert(vec[t][q] != NULL);
+	printf("\t");
+	svec_print(vec[t][q]);
+      }
+    }
     printf("\n");
   }
   fflush(stdout);
-  g_message("Z=%g (approx %g)", calcZ(), Z);
+  if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
   free_data();
   free_rng();
   g_message("bye");
