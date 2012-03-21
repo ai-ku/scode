@@ -12,8 +12,9 @@ const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
 
 #define NTOK 2		      /* number of tokens per input line */
-#define PHI0 100.0	      /* learning rate parameter */
-#define NU0 0.1		      /* learning rate parameter */
+#define PHI0 50.0	      /* learning rate parameter */
+#define NU0 0.2		      /* learning rate parameter */
+int RESTART = 1;	      /* how many times to restart */
 int NITER = 20;		      /* how many times to go over the data */
 int NDIM = 25;		      /* dimensionality of the embedding */
 double Z = 0.166;	      /* partition function approximation */
@@ -23,15 +24,19 @@ int VMERGE = 0;		      /* whether to merge vectors at output */
 typedef GQuark Tuple[NTOK];
 
 GArray *data;
+guint *update_cnt[NTOK];
 guint *cnt[NTOK];
-float *frq[NTOK];
+#define frq(i,j) ((double)cnt[i][j]/data->len)
 svec *vec[NTOK];
+svec *best_vec[NTOK];
 GQuark qmax;
 
 int main(int argc, char **argv);
 void init_rng();
 void free_rng();
 void init_data();
+void randomize_vectors();
+void copy_best_vec();
 void free_data();
 float update_tuple(Tuple t);
 float update_svec(svec x, svec y, svec y2, float xy2, float nx);
@@ -43,8 +48,9 @@ int main(int argc, char **argv) {
   g_message("hello");
 
   int opt;
-  while((opt = getopt(argc, argv, "i:d:z:c2")) != -1) {
+  while((opt = getopt(argc, argv, "r:i:d:z:c2")) != -1) {
     switch(opt) {
+    case 'r': RESTART = atoi(optarg); break;
     case 'i': NITER = atoi(optarg); break;
     case 'd': NDIM = atoi(optarg); break;
     case 'z': Z = atof(optarg); break;
@@ -58,38 +64,48 @@ int main(int argc, char **argv) {
   g_message("Reading data");
   init_data();
   g_message("Read %d tuples %d uniq tokens", data->len, qmax);
-  g_message("logL=%g", logL());
-  if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
-  for (int iter = 0; iter < NITER; iter++) {
-    g_message("Iteration %d", iter);
-    float maxmove = 0;
-    for (int di = 0; di < data->len; di++) {
-      float dx = update_tuple(g_array_index(data, Tuple, di));
-      if (dx > maxmove) maxmove = dx;
+
+  double best_logL = 0;
+  for (int start = 0; start < RESTART; start++) {
+    randomize_vectors();
+    double ll = logL();
+    g_message("Restart %d/%d logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
+    if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
+    for (int iter = 0; iter < NITER; iter++) {
+      for (int di = 0; di < data->len; di++) {
+	update_tuple(g_array_index(data, Tuple, di));
+      }
+      ll = logL();
+      g_message("Iteration %d/%d logL=%g", 1+iter, NITER, ll);
     }
-    g_message("maxmove=%g", sqrt(maxmove));
-    g_message("logL=%g", logL());
+    if (start == 0 || ll > best_logL) {
+      g_message("Updating best_vec with logL=%g", ll);
+      best_logL = ll;
+      copy_best_vec();
+    }
+    g_message("Restart %d/%d logL1=%g best=%g", 1+start, RESTART, ll, best_logL);
+    if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
   }
+
   int nz = 0;
   for (guint q = 1; q <= qmax; q++) {
-    if (vec[0][q] != NULL) nz++;
+    if (best_vec[0][q] != NULL) nz++;
   }
   printf("%d\t%d\n", nz, VMERGE ? NTOK * NDIM : NDIM);
   for (guint q = 1; q <= qmax; q++) {
-    if (vec[0][q] == NULL) continue;
-    printf("%s\t%g\t", g_quark_to_string(q), frq[0][q]);
-    svec_print(vec[0][q]);
+    if (best_vec[0][q] == NULL) continue;
+    printf("%s\t%d\t", g_quark_to_string(q), cnt[0][q]);
+    svec_print(best_vec[0][q]);
     if (VMERGE) {
       for (guint t = 1; t < NTOK; t++) {
-	g_assert(vec[t][q] != NULL);
+	g_assert(best_vec[t][q] != NULL);
 	printf("\t");
-	svec_print(vec[t][q]);
+	svec_print(best_vec[t][q]);
       }
     }
     printf("\n");
   }
   fflush(stdout);
-  if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
   free_data();
   free_rng();
   g_message("bye");
@@ -101,8 +117,8 @@ double logL() {
     GQuark *t = g_array_index(data, Tuple, i);
     GQuark x = t[0];
     GQuark y = t[1];
-    float px = frq[0][x];
-    float py = frq[1][y];
+    float px = frq(0, x);
+    float py = frq(1, y);
     svec vx = vec[0][x];
     svec vy = vec[1][y];
     float xy = svec_sqdist(vx, vy);
@@ -115,12 +131,12 @@ double calcZ() {
   double z = 0;
   for (guint x = 1; x <= qmax; x++) {
     if (x % 1000 == 0) fprintf(stderr, ".");
-    if (frq[0][x] == 0) continue;
-    float px = frq[0][x];
+    if (cnt[0][x] == 0) continue;
+    float px = frq(0, x);
     svec vx = vec[0][x];
     for (guint y = 1; y <= qmax; y++) {
-      if (frq[1][y] == 0) continue;
-      float py = frq[1][y];
+      if (cnt[1][y] == 0) continue;
+      float py = frq(1, y);
       svec vy = vec[1][y];
       float xy = svec_sqdist(vx, vy);
       z += px * py * exp(-xy);
@@ -133,8 +149,8 @@ double calcZ() {
 float update_tuple(Tuple t) {
   GQuark x1 = t[0];
   GQuark y1 = t[1];
-  guint cx = cnt[0][x1]++;
-  guint cy = cnt[1][y1]++;
+  guint cx = update_cnt[0][x1]++;
+  guint cy = update_cnt[1][y1]++;
   float nx = NU0 * (PHI0 / (PHI0 + cx));
   float ny = NU0 * (PHI0 / (PHI0 + cy));
   svec vx1 = vec[0][x1];
@@ -186,27 +202,42 @@ void init_data() {
     g_array_append_val(data, t);
   }
   for (int i = 0; i < NTOK; i++) {
+    update_cnt[i] = g_new0(guint, qmax+1);
     cnt[i] = g_new0(guint, qmax+1);
-    frq[i] = g_new0(float, qmax+1);
     vec[i] = g_new0(svec, qmax+1);
+    best_vec[i] = g_new0(svec, qmax+1);
   }
   for (int i = 0; i < data->len; i++) {
     GQuark *p = g_array_index(data, Tuple, i);    
     for (int j = 0; j < NTOK; j++) {
       int k = p[j];
       g_assert(k <= qmax);
-      frq[j][k]++;
+      cnt[j][k]++;
       if (vec[j][k] == NULL) {
-	svec v = svec_alloc(NDIM);
-	svec_randomize(v);
-	vec[j][k] = v;
+	vec[j][k] = svec_alloc(NDIM);
+	best_vec[j][k] = svec_alloc(NDIM);
       }
     }
   }
-  for (int i = 0; i < NTOK; i++) {
-    for (int j = 0; j <= qmax; j++) {
-      if (frq[i][j] == 0) continue;
-      frq[i][j] /= data->len;
+}
+
+void randomize_vectors() {
+  for (int j = 0; j < NTOK; j++) {
+    for (guint q = 1; q <= qmax; q++) {
+      if (vec[j][q] != NULL) {
+	svec_randomize(vec[j][q]);
+	update_cnt[j][q] = 0;
+      }
+    }
+  }
+}
+
+void copy_best_vec() {
+  for (int j = 0; j < NTOK; j++) {
+    for (guint q = 1; q <= qmax; q++) {
+      if (vec[j][q] != NULL) {
+	svec_memcpy(best_vec[j][q], vec[j][q]);
+      }
     }
   }
 }
@@ -214,10 +245,14 @@ void init_data() {
 void free_data() {
   for (int i = 0; i < NTOK; i++) {
     for (int j = 0; j <= qmax; j++) {
-      if (vec[i][j] != NULL) svec_free(vec[i][j]);
+      if (vec[i][j] != NULL) {
+	svec_free(vec[i][j]);
+	svec_free(best_vec[i][j]);
+      }
     }
     g_free(vec[i]);
-    g_free(cnt[i]);
+    g_free(best_vec[i]);
+    g_free(update_cnt[i]);
   }
   g_array_free(data, TRUE);
 }
