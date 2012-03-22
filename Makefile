@@ -14,3 +14,5 @@ svec.o: svec.c svec.h
 kmeans.o: kmeans.c kmeans.h svec.h
 	$(CC) -c $(CFLAGS) $< -o $@
 
+clean:
+	-rm *.o scode
