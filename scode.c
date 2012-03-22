@@ -1,3 +1,30 @@
+const char *rcsid = "$Id$";
+
+const char *usage = "Usage: scode [OPTIONS] < file\n"
+  "file should have two columns of arbitrary tokens\n"
+  "-r RESTART: number of restarts (default 1)\n"
+  "-i NITER: number of iterations over data (default 20)\n"
+  "-d NDIM: number of dimensions (default 25)\n"
+  "-z Z: partition function approximation (default 0.166)\n"
+  "-p PHI0: learning rate parameter (default 50.0)\n"
+  "-u NU0: learning rate parameter (default 0.2)\n"
+  "-s SEED: random seed (default 0)\n"
+  "-c: calculate real Z (default false)\n"
+  "-m: merge vectors at output (default false)\n"
+  "-v: verbose messages (default false)\n";
+
+#define NTOK 2		      /* number of tokens per input line */
+int RESTART = 1;
+int NITER = 20;
+int NDIM = 25;
+double Z = 0.166;
+double PHI0 = 50.0;
+double NU0 = 0.2;
+int SEED = 0;
+int CALCZ = 0;
+int VMERGE = 0;
+int VERBOSE = 0;
+
 #include <stdio.h>
 #include <unistd.h>
 #include <glib.h>
@@ -8,21 +35,10 @@
 #include "procinfo.h"
 #include "svec.h"
 #include "rng.h"
-const gsl_rng_type *rng_T;
-gsl_rng *rng_R = NULL;
-
-#define NTOK 2		      /* number of tokens per input line */
-#define PHI0 50.0	      /* learning rate parameter */
-#define NU0 0.2		      /* learning rate parameter */
-int RESTART = 1;	      /* how many times to restart */
-int NITER = 20;		      /* how many times to go over the data */
-int NDIM = 25;		      /* dimensionality of the embedding */
-double Z = 0.166;	      /* partition function approximation */
-int CALCZ = 0;		      /* whether to calculate real Z */
-int VMERGE = 0;		      /* whether to merge vectors at output */
 
 typedef GQuark Tuple[NTOK];
-
+const gsl_rng_type *rng_T;
+gsl_rng *rng_R = NULL;
 GArray *data;
 guint *update_cnt[NTOK];
 guint *cnt[NTOK];
@@ -43,48 +59,57 @@ float update_svec(svec x, svec y, svec y2, float xy2, float nx);
 double logL();
 double calcZ();
 
-int main(int argc, char **argv) {
-  g_message_init();
-  g_message("hello");
+#define msg if(VERBOSE)g_message
 
+int main(int argc, char **argv) {
   int opt;
-  while((opt = getopt(argc, argv, "r:i:d:z:c2")) != -1) {
+  while((opt = getopt(argc, argv, "r:i:d:z:u:p:s:cmv")) != -1) {
     switch(opt) {
     case 'r': RESTART = atoi(optarg); break;
     case 'i': NITER = atoi(optarg); break;
     case 'd': NDIM = atoi(optarg); break;
     case 'z': Z = atof(optarg); break;
+    case 'u': NU0 = atof(optarg); break;
+    case 'p': PHI0 = atof(optarg); break;
+    case 's': SEED = atoi(optarg); break;
     case 'c': CALCZ = 1; break;
-    case '2': VMERGE = 1; break;
-    default: g_error("Usage: scode [options] < input");
+    case 'm': VMERGE = 1; break;
+    case 'v': VERBOSE = 1; break;
+    default: g_error(usage);
     }
   }
 
+  g_message_init();
+  msg("scode -r %d -i %d -d %d -z %g -u %g -p %g -s %d %s%s%s",
+      RESTART, NITER, NDIM, Z, NU0, PHI0, SEED,
+      (CALCZ ? "-c " : ""), (VMERGE ? "-m " : ""), (VERBOSE ? "-v " : ""));
+
   init_rng();
-  g_message("Reading data");
+  if (SEED) gsl_rng_set(rng_R, SEED);
+
   init_data();
-  g_message("Read %d tuples %d uniq tokens", data->len, qmax);
+  msg("Read %d tuples %d uniq tokens", data->len, qmax);
 
   double best_logL = 0;
   for (int start = 0; start < RESTART; start++) {
     randomize_vectors();
     double ll = logL();
-    g_message("Restart %d/%d logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
-    if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
+    msg("Restart %d/%d logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
+    if (CALCZ) msg("Z=%g (approx %g)", calcZ(), Z);
     for (int iter = 0; iter < NITER; iter++) {
       for (int di = 0; di < data->len; di++) {
 	update_tuple(g_array_index(data, Tuple, di));
       }
       ll = logL();
-      g_message("Iteration %d/%d logL=%g", 1+iter, NITER, ll);
+      msg("Iteration %d/%d logL=%g", 1+iter, NITER, ll);
     }
     if (start == 0 || ll > best_logL) {
-      g_message("Updating best_vec with logL=%g", ll);
+      msg("Updating best_vec with logL=%g", ll);
       best_logL = ll;
       copy_best_vec();
     }
-    g_message("Restart %d/%d logL1=%g best=%g", 1+start, RESTART, ll, best_logL);
-    if (CALCZ) g_message("Z=%g (approx %g)", calcZ(), Z);
+    msg("Restart %d/%d logL1=%g best=%g", 1+start, RESTART, ll, best_logL);
+    if (CALCZ) msg("Z=%g (approx %g)", calcZ(), Z);
   }
 
   int nz = 0;
@@ -108,7 +133,7 @@ int main(int argc, char **argv) {
   fflush(stdout);
   free_data();
   free_rng();
-  g_message("bye");
+  msg("bye");
 }
 
 double logL() {
@@ -130,7 +155,7 @@ double logL() {
 double calcZ() {
   double z = 0;
   for (guint x = 1; x <= qmax; x++) {
-    if (x % 1000 == 0) fprintf(stderr, ".");
+    if (VERBOSE && (x % 1000 == 0)) fprintf(stderr, ".");
     if (cnt[0][x] == 0) continue;
     float px = frq(0, x);
     svec vx = vec[0][x];
@@ -142,7 +167,7 @@ double calcZ() {
       z += px * py * exp(-xy);
     }
   }
-  fprintf(stderr, "\n");
+  if (VERBOSE) fprintf(stderr, "\n");
   return z;
 }
 
