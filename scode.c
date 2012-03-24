@@ -15,7 +15,7 @@ const char *usage = "Usage: scode [OPTIONS] < file\n"
 
 #define NTOK 2		      /* number of tokens per input line */
 int RESTART = 1;
-int NITER = 20;
+int NITER = 50;
 int NDIM = 25;
 double Z = 0.166;
 double PHI0 = 50.0;
@@ -112,24 +112,27 @@ int main(int argc, char **argv) {
     if (CALCZ) msg("Z=%g (approx %g)", calcZ(), Z);
   }
 
-  int nz = 0;
-  for (guint q = 1; q <= qmax; q++) {
-    if (best_vec[0][q] != NULL) nz++;
-  }
-  printf("%d\t%d\n", nz, VMERGE ? NTOK * NDIM : NDIM);
-  for (guint q = 1; q <= qmax; q++) {
-    if (best_vec[0][q] == NULL) continue;
-    printf("%s\t%d\t", g_quark_to_string(q), cnt[0][q]);
-    svec_print(best_vec[0][q]);
-    if (VMERGE) {
-      for (guint t = 1; t < NTOK; t++) {
+  if (VMERGE) {			/* output for Maron et.al. 2010 bigram s-code model */
+    for (guint q = 1; q <= qmax; q++) {
+      printf("%s\t%d", g_quark_to_string(q), cnt[0][q]);
+      for (guint t = 0; t < NTOK; t++) {
 	g_assert(best_vec[t][q] != NULL);
-	printf("\t");
+	putchar('\t');
 	svec_print(best_vec[t][q]);
       }
+      putchar('\n');
     }
-    printf("\n");
+  } else {			/* regular output */
+    for (guint t = 0; t < NTOK; t++) {
+      for (guint q = 1; q <= qmax; q++) {
+	if (best_vec[t][q] == NULL) continue;
+	printf("%d:%s\t%d\t", t, g_quark_to_string(q), cnt[t][q]);
+	svec_print(best_vec[t][q]);
+	putchar('\n');
+      }
+    }
   }
+
   fflush(stdout);
   free_data();
   free_rng();
