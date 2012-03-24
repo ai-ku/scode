@@ -136,6 +136,7 @@ int main(int argc, char **argv) {
   fflush(stdout);
   free_data();
   free_rng();
+  fprintf(stderr, "%f\n", best_logL);
   msg("bye");
 }
 
