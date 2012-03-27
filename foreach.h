@@ -2,15 +2,13 @@
 
 #ifndef __FOREACH_H__
 #define __FOREACH_H__
+#define __GNU_SOURCE__
 
 #include <stdio.h>
 #include <string.h>
 #include <glib.h>
 #include <errno.h>
 #include <stdlib.h>
-extern char *strtok_r(char *s, const char *delim, char **ptrptr);
-extern FILE *popen (__const char *__command, __const char *__modes);
-extern int pclose (FILE *__stream);
 
 /* FOREACH: C needs some good looping macros: */
 
@@ -33,14 +31,14 @@ extern int pclose (FILE *__stream);
   for (register char var, *_p = (str);\
        (var = *_p) != 0; _p++)
 
-#define LINE (1<<16)
+#define LINE (1<<20)
 
 /* Use the empty string to represent stdin */
-/* Use "|cmd" to represent the output of a command */
+/* Use "< cmd" to represent the output of a command */
 /* Use path string for a regular file */
 
-#define _myopen(f) ((*(f)==0)?stdin:(*(f)=='|')?popen((f)+1,"r"):fopen((f),"r"))
-#define _myclose(f,fp) ((*(f)==0)?0:(*(f)=='|')?pclose(fp):fclose(fp))
+#define _myopen(f) ((*(f)==0)?stdin:(*(f)=='<')?popen((f)+1,"r"):fopen((f),"r"))
+#define _myclose(f,fp) ((*(f)==0)?0:(*(f)=='<')?pclose(fp):fclose(fp))
 
 #define foreach_line(str, fname)\
   errno = 0; \
