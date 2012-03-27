@@ -2,7 +2,7 @@
 
 #ifndef __FOREACH_H__
 #define __FOREACH_H__
-#define __GNU_SOURCE__
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <string.h>
