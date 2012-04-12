@@ -6,34 +6,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <glib.h>
-#include "foreach.h"
 
 #define dot(n) (((n)==0) ? (_procinfo_cnt = (fputc('\n', stderr), 0)) :\
 		(++_procinfo_cnt && ((n)<64)) ? fputc('.', stderr) :\
 		(_procinfo_cnt % ((n)>>2) == 0) ? fprintf(stderr, "%d%%", 25*_procinfo_cnt/(n>>2)) :\
 		(_procinfo_cnt % ((n)>>5) == 0) ? fputc('.', stderr) : 0)
 
-guint32 _procinfo_cnt = 0;
+unsigned long _procinfo_cnt = 0;
 
-static guint64 memory() {
-  guint64 mem = 0;
-#ifndef CYGWIN
-  int i = 0;
-  foreach_line(buf, "/proc/self/stat") {
-    foreach_token(tok, buf) {
-      if (++i == 23) {
+static unsigned long long memory() {
+  static char buf[1024];
+  unsigned long long mem = 0;
+  if (FILE *fp = fopen("/proc/self/stat", "r")) {
+    if (fgets(buf, 1024, fp)) {
+      char *tok = strtok(buf, " ");
+      for (int i = 1; i < 23; i++) {
+	tok = strtok(NULL, " ");
+      }
+      if (tok != NULL) {
 	mem = atoll(tok);
-	break;
       }
     }
-    break;
   }
-#endif
   return mem;
 }
 
-static guint32 runtime() {
+static unsigned long runtime() {
   static time_t t0 = 0;
   time_t t1 = time(NULL);
   if (t0 == 0) t0 = t1;
@@ -53,6 +51,8 @@ static guint32 runtime() {
    which has a resolution of seconds.
 */
 
+#ifdef __G_LIB_H__
+
 static void my_log_func(const gchar *log_domain,
 		 GLogLevelFlags log_level,
 		 const gchar *message,
@@ -65,5 +65,7 @@ static void g_message_init()
 {
   g_log_set_handler(NULL, G_LOG_LEVEL_MESSAGE, my_log_func, NULL);
 }
+
+#endif
 
 #endif
