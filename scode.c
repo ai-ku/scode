@@ -1,7 +1,6 @@
-const char *rcsid = "$Id$";
-
 const char *usage = "Usage: scode [OPTIONS] < file\n"
-  "file should have two columns of arbitrary tokens\n"
+  "file should have columns of arbitrary tokens\n"
+  "-n NTOK: number of tokens per input line\n"
   "-r RESTART: number of restarts (default 1)\n"
   "-i NITER: number of iterations over data (default 20)\n"
   "-d NDIM: number of dimensions (default 25)\n"
@@ -13,7 +12,7 @@ const char *usage = "Usage: scode [OPTIONS] < file\n"
   "-m: merge vectors at output (default false)\n"
   "-v: verbose messages (default false)\n";
 
-#define NTOK 2		      /* number of tokens per input line */
+int NTOK = 2;
 int RESTART = 1;
 int NITER = 50;
 int NDIM = 25;
@@ -36,15 +35,14 @@ int VERBOSE = 0;
 #include "svec.h"
 #include "rng.h"
 
-typedef GQuark Tuple[NTOK];
 const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
 GArray *data;
-guint *update_cnt[NTOK];
-guint *cnt[NTOK];
-#define frq(i,j) ((double)cnt[i][j]/data->len)
-svec *vec[NTOK];
-svec *best_vec[NTOK];
+guint **update_cnt;
+guint **cnt;
+#define frq(i,j) ((double)cnt[i][j]*NTOK/data->len)
+svec **vec;
+svec **best_vec;
 GQuark qmax;
 
 int main(int argc, char **argv);
@@ -54,7 +52,7 @@ void init_data();
 void randomize_vectors();
 void copy_best_vec();
 void free_data();
-float update_tuple(Tuple t);
+float update_tuple(GQuark *t);
 float update_svec(svec x, svec y, svec y2, float xy2, float nx);
 double logL();
 double calcZ();
@@ -63,8 +61,9 @@ double calcZ();
 
 int main(int argc, char **argv) {
   int opt;
-  while((opt = getopt(argc, argv, "r:i:d:z:u:p:s:cmv")) != -1) {
+  while((opt = getopt(argc, argv, "n:r:i:d:z:u:p:s:cmv")) != -1) {
     switch(opt) {
+    case 'n': NTOK = atoi(optarg); break;
     case 'r': RESTART = atoi(optarg); break;
     case 'i': NITER = atoi(optarg); break;
     case 'd': NDIM = atoi(optarg); break;
@@ -80,15 +79,16 @@ int main(int argc, char **argv) {
   }
 
   g_message_init();
-  msg("scode -r %d -i %d -d %d -z %g -u %g -p %g -s %d %s%s%s",
-      RESTART, NITER, NDIM, Z, NU0, PHI0, SEED,
+  msg("scode -n %d -r %d -i %d -d %d -z %g -u %g -p %g -s %d %s%s%s",
+      NTOK, RESTART, NITER, NDIM, Z, NU0, PHI0, SEED,
       (CALCZ ? "-c " : ""), (VMERGE ? "-m " : ""), (VERBOSE ? "-v " : ""));
 
   init_rng();
   if (SEED) gsl_rng_set(rng_R, SEED);
 
   init_data();
-  msg("Read %d tuples %d uniq tokens", data->len, qmax);
+  int N = data->len / NTOK;
+  msg("Read %d tuples %d uniq tokens", N, qmax);
 
   double best_logL = 0;
   for (int start = 0; start < RESTART; start++) {
@@ -97,8 +97,8 @@ int main(int argc, char **argv) {
     msg("Restart %d/%d logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
     if (CALCZ) msg("Z=%g (approx %g)", calcZ(), Z);
     for (int iter = 0; iter < NITER; iter++) {
-      for (int di = 0; di < data->len; di++) {
-	update_tuple(g_array_index(data, Tuple, di));
+      for (int di = 0; di < N; di++) {
+	update_tuple(&g_array_index(data, GQuark, di * NTOK));
       }
       ll = logL();
       msg("Iteration %d/%d logL=%g", 1+iter, NITER, ll);
@@ -142,8 +142,9 @@ int main(int argc, char **argv) {
 
 double logL() {
   double l = 0;
-  for (int i = 0; i < data->len; i++) {
-    GQuark *t = g_array_index(data, Tuple, i);
+  int N = data->len / NTOK;
+  for (int i = 0; i < N; i++) {
+    GQuark *t = &g_array_index(data, GQuark, i * NTOK);
     GQuark x = t[0];
     GQuark y = t[1];
     float px = frq(0, x);
@@ -153,7 +154,7 @@ double logL() {
     float xy = svec_sqdist(vx, vy);
     l += log(px * py) - xy;
   }
-  return (l / data->len - log(Z));
+  return (l / N - log(Z));
 }
 
 double calcZ() {
@@ -175,7 +176,8 @@ double calcZ() {
   return z;
 }
 
-float update_tuple(Tuple t) {
+float update_tuple(GQuark *t) {
+  int N = data->len / NTOK;
   GQuark x1 = t[0];
   GQuark y1 = t[1];
   guint cx = update_cnt[0][x1]++;
@@ -184,10 +186,10 @@ float update_tuple(Tuple t) {
   float ny = NU0 * (PHI0 / (PHI0 + cy));
   svec vx1 = vec[0][x1];
   svec vy1 = vec[1][y1];
-  guint rx = gsl_rng_uniform_int(rng_R, data->len);
-  GQuark x2 = g_array_index(data, Tuple, rx)[0];
-  guint ry = gsl_rng_uniform_int(rng_R, data->len);
-  GQuark y2 = g_array_index(data, Tuple, ry)[1];
+  guint rx = gsl_rng_uniform_int(rng_R, N);
+  GQuark x2 = g_array_index(data, GQuark, rx * NTOK);
+  guint ry = gsl_rng_uniform_int(rng_R, N);
+  GQuark y2 = g_array_index(data, GQuark, ry * NTOK + 1);
   svec vx2 = vec[0][x2];
   svec vy2 = vec[1][y2];
   float x1y2 = svec_sqdist(vx1, vy2);
@@ -216,28 +218,31 @@ float update_svec(svec x, svec y, svec y2, float xy2, float nx) {
 }
   
 void init_data() {
-  Tuple t;
   qmax = 0;
-  data = g_array_new(FALSE, FALSE, sizeof(Tuple));
+  data = g_array_new(FALSE, FALSE, sizeof(GQuark));
   foreach_line(buf, "") {
     int i = 0;
     foreach_token(tok, buf) {
-      g_assert(i < NTOK);
+      g_assert(i++ < NTOK);
       GQuark q = g_quark_from_string(tok);
       if (q > qmax) qmax = q;
-      t[i++] = q;
+      g_array_append_val(data, q);
     }
     g_assert(i == NTOK);
-    g_array_append_val(data, t);
   }
+  update_cnt = malloc(NTOK * sizeof(gpointer));
+  cnt = malloc(NTOK * sizeof(gpointer));
+  vec = malloc(NTOK * sizeof(gpointer));
+  best_vec = malloc(NTOK * sizeof(gpointer));
   for (int i = 0; i < NTOK; i++) {
     update_cnt[i] = g_new0(guint, qmax+1);
     cnt[i] = g_new0(guint, qmax+1);
     vec[i] = g_new0(svec, qmax+1);
     best_vec[i] = g_new0(svec, qmax+1);
   }
-  for (int i = 0; i < data->len; i++) {
-    GQuark *p = g_array_index(data, Tuple, i);    
+  int N = data->len / NTOK;
+  for (int i = 0; i < N; i++) {
+    GQuark *p = &g_array_index(data, GQuark, i * NTOK);    
     for (int j = 0; j < NTOK; j++) {
       int k = p[j];
       g_assert(k <= qmax);
