@@ -18,7 +18,9 @@
 
 #ifndef __FOREACH_H__
 #define __FOREACH_H__
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <string.h>

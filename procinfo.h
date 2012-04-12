@@ -18,7 +18,9 @@
 
 #ifndef __PROCINFO_H__
 #define __PROCINFO_H__
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,8 +35,9 @@ unsigned long _procinfo_cnt = 0;
 
 static unsigned long long memory() {
   static char buf[1024];
+  FILE *fp;
   unsigned long long mem = 0;
-  if (FILE *fp = fopen("/proc/self/stat", "r")) {
+  if ((fp = fopen("/proc/self/stat", "r")) != NULL) {
     if (fgets(buf, 1024, fp)) {
       char *tok = strtok(buf, " ");
       for (int i = 1; i < 23; i++) {
@@ -74,7 +77,7 @@ static void my_log_func(const gchar *log_domain,
 		 GLogLevelFlags log_level,
 		 const gchar *message,
 		 gpointer user_data) {
-  fprintf(stderr, "[t=%d m=%" G_GUINT64_FORMAT "] %s\n", 
+  fprintf(stderr, "[t=%lu m=%llu] %s\n", 
 	  runtime(), memory(), message);
 }
 
