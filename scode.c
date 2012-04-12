@@ -113,6 +113,7 @@ int main(int argc, char **argv) {
   }
 
   if (VMERGE) {			/* output for Maron et.al. 2010 bigram s-code model */
+    /* Actually there is no need for this, a script can do this with normal output. */
     for (guint q = 1; q <= qmax; q++) {
       printf("%s\t%d", g_quark_to_string(q), cnt[0][q]);
       for (guint t = 0; t < NTOK; t++) {
