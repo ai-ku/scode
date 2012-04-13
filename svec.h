@@ -7,6 +7,7 @@
 typedef gsl_vector_float *svec;
 
 #define svec_alloc gsl_vector_float_alloc
+#define svec_calloc gsl_vector_float_calloc
 #define svec_free gsl_vector_float_free
 #define svec_get gsl_vector_float_get
 #define svec_set gsl_vector_float_set

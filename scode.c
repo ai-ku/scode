@@ -23,6 +23,7 @@ int SEED = 0;
 int CALCZ = 0;
 int VMERGE = 0;
 int VERBOSE = 0;
+int NTUPLE = 0;
 
 #include <stdio.h>
 #include <unistd.h>
@@ -48,12 +49,11 @@ GQuark qmax;
 int main(int argc, char **argv);
 void init_rng();
 void free_rng();
-void init_data();
+int init_data();
 void randomize_vectors();
 void copy_best_vec();
 void free_data();
-float update_tuple(GQuark *t);
-float update_svec(svec x, svec y, svec y2, float xy2, float nx);
+void update_tuple(GQuark *t);
 double logL();
 double calcZ();
 
@@ -86,9 +86,8 @@ int main(int argc, char **argv) {
   init_rng();
   if (SEED) gsl_rng_set(rng_R, SEED);
 
-  init_data();
-  int N = data->len / NTOK;
-  msg("Read %d tuples %d uniq tokens", N, qmax);
+  NTUPLE = init_data();
+  msg("Read %d tuples %d uniq tokens", NTUPLE, qmax);
 
   double best_logL = 0;
   for (int start = 0; start < RESTART; start++) {
@@ -97,7 +96,7 @@ int main(int argc, char **argv) {
     msg("Restart %d/%d logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
     if (CALCZ) msg("Z=%g (approx %g)", calcZ(), Z);
     for (int iter = 0; iter < NITER; iter++) {
-      for (int di = 0; di < N; di++) {
+      for (int di = 0; di < NTUPLE; di++) {
 	update_tuple(&g_array_index(data, GQuark, di * NTOK));
       }
       ll = logL();
@@ -143,8 +142,7 @@ int main(int argc, char **argv) {
 
 double logL() {
   double l = 0;
-  int N = data->len / NTOK;
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; i < NTUPLE; i++) {
     GQuark *t = &g_array_index(data, GQuark, i * NTOK);
     GQuark x = t[0];
     GQuark y = t[1];
@@ -155,7 +153,7 @@ double logL() {
     float xy = svec_sqdist(vx, vy);
     l += log(px * py) - xy;
   }
-  return (l / N - log(Z));
+  return (l / NTUPLE - log(Z));
 }
 
 double calcZ() {
@@ -177,8 +175,60 @@ double calcZ() {
   return z;
 }
 
-float update_tuple(GQuark *t) {
-  int N = data->len / NTOK;
+void update_tuple(GQuark *t) {
+  static svec *u = NULL;
+  static svec *v = NULL;
+  static svec dx = NULL;
+  if (u == NULL) u = malloc(NTOK * sizeof(svec));
+  if (v == NULL) v = malloc(NTOK * sizeof(svec));
+  if (dx == NULL) dx = svec_alloc(NDIM);
+
+  for (int i = 0; i < NTOK; i++) u[i] = vec[i][t[i]];
+
+  for (int i = 0; i < NTOK; i++) {
+
+    /* Sampling values from the marginal distributions. */
+    /* Can this be done once, or do we have to resample for every x? */
+    for (int j = 0; j < NTOK; j++) {
+      if (j==i) { v[j] = u[i]; continue; }
+      guint r = gsl_rng_uniform_int(rng_R, NTUPLE);
+      GQuark y = g_array_index(data, GQuark, r * NTOK + j);
+      v[j] = vec[j][y];
+    }
+
+    /* Compute sum distance squared and the push coefficient */
+    gdouble d2 = 0;
+    for (int j = 0; j < NTOK; j++) {
+      for (int k = 0; k < j; k++) {
+	d2 += svec_sqdist(v[k], v[j]);
+      }
+    }
+    gdouble push = exp(-d2) / Z;
+
+    /* Compute the move for u[i] */
+    svec_set_zero(dx);
+    for (int j = 0; j < NTOK; j++) {
+      if (j == i) continue;
+      for (int d = 0; d < NDIM; d++) {
+	float dxd = svec_get(dx, d);
+	float x = svec_get(u[i], d);
+	float y = svec_get(u[j], d);
+	float z = svec_get(v[j], d);
+	svec_set(dx, d, dxd + (y - x + push * (x - z)));
+      }
+    }
+
+    /* Apply the move scaled by learning parameter */
+    guint cx = update_cnt[i][t[i]]++;
+    float nx = NU0 * (PHI0 / (PHI0 + cx));
+    svec_scale(dx, nx);
+    svec_add(u[i], dx);
+    svec_normalize(u[i]);
+  }
+}
+
+#ifdef OLD
+float update_tuple_old(GQuark *t) {
   GQuark x1 = t[0];
   GQuark y1 = t[1];
   guint cx = update_cnt[0][x1]++;
@@ -187,9 +237,9 @@ float update_tuple(GQuark *t) {
   float ny = NU0 * (PHI0 / (PHI0 + cy));
   svec vx1 = vec[0][x1];
   svec vy1 = vec[1][y1];
-  guint rx = gsl_rng_uniform_int(rng_R, N);
+  guint rx = gsl_rng_uniform_int(rng_R, NTUPLE);
   GQuark x2 = g_array_index(data, GQuark, rx * NTOK);
-  guint ry = gsl_rng_uniform_int(rng_R, N);
+  guint ry = gsl_rng_uniform_int(rng_R, NTUPLE);
   GQuark y2 = g_array_index(data, GQuark, ry * NTOK + 1);
   svec vx2 = vec[0][x2];
   svec vy2 = vec[1][y2];
@@ -200,7 +250,7 @@ float update_tuple(GQuark *t) {
   return (dx > dy ? dx : dy);
 }
 
-float update_svec(svec x, svec y, svec y2, float xy2, float nx) {
+float update_svec_old(svec x, svec y, svec y2, float xy2, float nx) {
   float sum_move2 = 0;
   float sum_x2 = 0;
   float exy2z = exp(-xy2) / Z;
@@ -217,8 +267,9 @@ float update_svec(svec x, svec y, svec y2, float xy2, float nx) {
   svec_scale(x, 1 / sqrt(sum_x2));
   return sum_move2;
 }
+#endif
   
-void init_data() {
+int init_data() {
   qmax = 0;
   data = g_array_new(FALSE, FALSE, sizeof(GQuark));
   foreach_line(buf, "") {
@@ -254,6 +305,7 @@ void init_data() {
       }
     }
   }
+  return N;
 }
 
 void randomize_vectors() {

@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-O3 -D_GNU_SOURCE -Wall -std=c99 -I. `pkg-config --cflags glib-2.0`
+CFLAGS=-g -D_GNU_SOURCE -Wall -std=c99 -I. `pkg-config --cflags glib-2.0`
 LIBS=`pkg-config --libs glib-2.0` -lm -lgsl -lgslcblas
 
 scode: scode.o svec.o
