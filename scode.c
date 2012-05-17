@@ -58,6 +58,7 @@ float update_tuple(Tuple t);
 float update_svec(svec x, svec y, svec y2, float xy2, float nx);
 double logL();
 double calcZ();
+void print_coordinates(guint q);
 
 #define msg if(VERBOSE)g_message
 
@@ -194,6 +195,7 @@ float update_tuple(Tuple t) {
   float y1x2 = svec_sqdist(vx2, vy1);
   float dx = update_svec(vx1, vy1, vy2, x1y2, nx);
   float dy = update_svec(vy1, vx1, vx2, y1x2, ny);
+  print_coordinates(x1);
   return (dx > dy ? dx : dy);
 }
 
@@ -250,12 +252,21 @@ void init_data() {
   }
 }
 
+void print_coordinates(guint q) {
+  g_assert(vec[0][q] != NULL);
+  fputs(g_quark_to_string(q), stdout);
+  putchar('\t');
+  svec_print(vec[0][q]);
+  putchar('\n');
+}
+
 void randomize_vectors() {
   for (int j = 0; j < NTOK; j++) {
     for (guint q = 1; q <= qmax; q++) {
       if (vec[j][q] != NULL) {
 	svec_randomize(vec[j][q]);
 	update_cnt[j][q] = 0;
+	if (j == 0) print_coordinates(q);
       }
     }
   }
