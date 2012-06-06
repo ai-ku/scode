@@ -1,5 +1,3 @@
-const char *rcsid = "$Id$";
-
 const char *usage = "Usage: scode [OPTIONS] < file\n"
   "file should have two columns of arbitrary tokens\n"
   "-r RESTART: number of restarts (default 1)\n"
