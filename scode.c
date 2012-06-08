@@ -182,10 +182,10 @@ float update_tuple(Tuple t) {
   float ny = NU0 * (PHI0 / (PHI0 + cy));
   svec vx1 = vec[0][x1];
   svec vy1 = vec[1][y1];
-  guint rx = gsl_rng_uniform_int(rng_R, data->len);
-  GQuark x2 = g_array_index(data, Tuple, rx)[0];
   guint ry = gsl_rng_uniform_int(rng_R, data->len);
   GQuark y2 = g_array_index(data, Tuple, ry)[1];
+  guint rx = gsl_rng_uniform_int(rng_R, data->len);
+  GQuark x2 = g_array_index(data, Tuple, rx)[0];
   svec vx2 = vec[0][x2];
   svec vy2 = vec[1][y2];
   float x1y2 = svec_sqdist(vx1, vy2);
