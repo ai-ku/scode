@@ -28,6 +28,12 @@ void svec_randomize(svec x) {
   svec_normalize(x);
 }
 
+void svec_zero(svec x){
+     for (int i = x->size - 1; i >= 0; i--) {
+          svec_set(x, i, 0);
+     }  
+}
+
 float svec_pull(svec x, svec y, float d) {
   float sumsq = 0;
   for (int i = x->size - 1; i >= 0; i--) {

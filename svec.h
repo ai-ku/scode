@@ -7,6 +7,7 @@
 typedef gsl_vector_float *svec;
 
 #define svec_alloc gsl_vector_float_alloc
+#define svec_calloc gsl_vector_float_calloc
 #define svec_free gsl_vector_float_free
 #define svec_get gsl_vector_float_get
 #define svec_set gsl_vector_float_set
@@ -18,6 +19,7 @@ typedef gsl_vector_float *svec;
 void svec_print(svec x);
 void svec_randomize(svec x);
 void svec_normalize(svec x);
+void svec_zero(svec x);
 float svec_pull(svec x, svec y, float d);
 float svec_push(svec x, svec y, float d);
 float svec_sqdist(svec x, svec y);
