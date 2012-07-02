@@ -10,6 +10,7 @@ const char *usage = "Usage: scode [OPTIONS] < file\n"
      "-s SEED: random seed (default 0)\n"
      "-c: calculate real Z (default false)\n"
      "-m: merge vectors at output (default false)\n"
+     "-w: The first line of the input is weights(default false)\n"
      "-v: verbose messages (default false)\n";
 
 int NTOK = -1;
