@@ -10,6 +10,13 @@ void svec_print(svec x) {
   }
 }
 
+void svec_mul_print(svec x, double k) {
+  for (int i = 0; i < x->size; i++) {
+    if (i > 0) printf("\t");
+    printf("%.6f", k * svec_get(x, i));
+  }
+}
+
 float svec_sqdist(svec x, svec y) {
   float sqdist = 0;
   for (int i = x->size - 1; i >= 0; i--) {
@@ -26,6 +33,12 @@ void svec_randomize(svec x) {
     svec_set(x, i, -1 + 2 * gsl_rng_uniform(rng_R));
   }
   svec_normalize(x);
+}
+
+void svec_zero(svec x){
+     for (int i = x->size - 1; i >= 0; i--) {
+          svec_set(x, i, 0);
+     }  
 }
 
 float svec_pull(svec x, svec y, float d) {
