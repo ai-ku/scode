@@ -11,7 +11,6 @@
 
 const char *usage = "Usage: scode [OPTIONS] < file\n"
   "file should have columns of arbitrary tokens\n"
-  //     "-n NTOK: number of tokens per input line\n"
   "-r RESTART: number of restarts (default 1)\n"
   "-i NITER: number of iterations over data (default 20)\n"
   "-t THRESHOLD: quit if logL increase for iter <= this (default .001)\n"
@@ -78,8 +77,6 @@ int main(int argc, char **argv) {
   int opt;
   while((opt = getopt(argc, argv, "n:r:i:t:d:z:u:p:s:e:acmwv")) != -1) {
     switch(opt) {
-      //               case 'n': NTOK = atoi(optarg); break;
-    case 'n': break;
     case 'r': RESTART = atoi(optarg); break;
     case 'i': NITER = atoi(optarg); break;
     case 't': THRESHOLD = atof(optarg); break;
@@ -106,10 +103,6 @@ int main(int argc, char **argv) {
   init_rng();
   if (SEED) gsl_rng_set(rng_R, SEED);
   if (WEIGHT) NTOK = init_weight();
-  /* for(int i = 0 ; i < NTOK ; i++){ */
-  /*      fprintf(stderr,"%d:%f ",i,weight[i]); */
-  /* } */
-  /* fprintf(stderr,"\n"); */
   NTUPLE = init_data();
   msg("Read %d tuples %d uniq tokens", NTUPLE, qmax);
 
@@ -123,16 +116,6 @@ int main(int argc, char **argv) {
       for (int di = 0; di < NTUPLE; di++) {
 	update_tuple(&g_array_index(data, GQuark, di * NTOK));
       }
-      /* fprintf(stderr,"Effect on Likelihood[NTOK:%d]\n",NTOK); */
-      //gdouble sum = 0;
-      //               for (int di = 1; di < NTOK; di++) {
-      //sum += (uweight[di]/cweight[di]);
-      //               }
-      /* for (int di = 1; di < NTOK; di++) { */
-      /*      //                    uweight[di] = uweight[di] / (cweight[di] * sum); */
-      /*      fprintf(stderr,"[%d:%f/%d(%f)] ",di,uweight[di],cweight[di],uweight[di]/cweight[di]); */
-      /*      uweight[di] = cweight[di] = 0; */
-      /* } */
       double ll0 = ll;
       ll = logL();
       msg("Iteration %d/%d logL=%g", 1+iter, NITER, ll);
@@ -283,12 +266,7 @@ void update_tuple(GQuark *t) {
       if(push == 0) v[j] = NULL;
       if(pull == 0) u[j] = NULL;
       if(i > 0) break;
-      /* /\*calculate the effect on likelihood(gradient of weight)*\/ */
-      /* if(pull != 0 || push != 0){ */
-      /*      uweight[j] += -log(Z) + log(frq(i,t[i]) * frq(j,t[j])) - push * Z; */
-      /*      cweight[j] += 1; */
-      /* } */
-    }
+      }
     /* Apply the move scaled by learning parameter */
     guint cx = update_cnt[i][t[i]]++;
     float nx = NU0 * (PHI0 / (PHI0 + cx));
