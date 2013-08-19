@@ -46,6 +46,7 @@ int PRINTALL = 0;
 const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
 GArray *data;
+#define DATA_MAXLEN (1<<29)
 guint **update_cnt;
 gdouble * weight = NULL;
 gdouble * uweight = NULL; /*Updated weights*/
@@ -397,6 +398,7 @@ int init_data() {
     foreach_token(tok, buf) {
       GQuark q = g_quark_from_string(tok);               
       if (q > qmax) qmax = q;
+      if (data->len >= DATA_MAXLEN) g_error("Number of tokens exceeded the maximum of %d", DATA_MAXLEN);
       g_array_append_val(data, q);
       if(strcmp(tok,NULLFEATMARKER) == 0) NULLFEATID = q;
       i++;
