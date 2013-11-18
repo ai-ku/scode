@@ -12,7 +12,7 @@
 const char *usage = "Usage: scode [OPTIONS] < file\n"
   "file should have columns of arbitrary tokens\n"
   "-r RESTART: number of restarts (default 1)\n"
-  "-i NITER: number of iterations over data (default 20)\n"
+  "-i NITER: number of iterations over data (default INT_MAX)\n"
   "-t THRESHOLD: quit if logL increase for iter <= this (default .001)\n"
   "-d NDIM: number of dimensions (default 25)\n"
   "-z Z: partition function approximation (default 0.166)\n"
