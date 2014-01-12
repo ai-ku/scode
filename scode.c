@@ -11,7 +11,7 @@
 const char *usage = "Usage: scode [OPTIONS] < file\n"
   "file should have columns of arbitrary tokens\n"
   "-r RESTART: number of restarts (default 1)\n"
-  "-i NITER: number of iterations over data (default INT_MAX)\n"
+  "-i NITER: number of iterations over data (default UINT32_MAX)\n"
   "-t THRESHOLD: quit if logL increase for iter <= this (default .001)\n"
   "-d NDIM: number of dimensions (default 25)\n"
   "-z Z: partition function approximation (default 0.166)\n"
@@ -19,13 +19,9 @@ const char *usage = "Usage: scode [OPTIONS] < file\n"
   "-u NU0: learning rate parameter (default 0.2)\n"
   "-s SEED: random seed (default 0)\n"
   "-c calculate real Z (default false)\n"
-  "-m merge vectors at output (default false)\n"
-  "-w The first line of the input is weights(default false)\n"
-  "-e MUL experimental features (default 0)\n"
-  "-a prints all embeddings (X,Y1,Y2...) (default false)\n"
+  "-w The first line of the input is weights (default false)\n"
   "-v verbose messages (default false)\n";
 
-int NTOK = -1;
 int RESTART = 1;
 int NITER = UINT32_MAX;
 double THRESHOLD = 0.001;
@@ -35,12 +31,11 @@ double PHI0 = 50.0;
 double NU0 = 0.2;
 int SEED = 0;
 int CALCZ = 0;
-int VMERGE = 0;
-int VERBOSE = 0;
-int NTUPLE = 0;
 int WEIGHT = 0;
-int EXPER = 0;
-int PRINTALL = 0;
+int VERBOSE = 0;
+
+int NTOK = -1;
+int NTUPLE = 0;
 
 const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
@@ -63,6 +58,7 @@ void init_rng();
 void free_rng();
 int init_data();
 int init_weight();
+void free_weight();
 void randomize_vectors();
 void copy_best_vec();
 void free_data();
@@ -74,29 +70,26 @@ double calcZ();
 
 int main(int argc, char **argv) {
   int opt;
-  while((opt = getopt(argc, argv, "n:r:i:t:d:z:u:p:s:e:acmwv")) != -1) {
+  while((opt = getopt(argc, argv, "r:i:t:d:z:p:u:s:cwv")) != -1) {
     switch(opt) {
     case 'r': RESTART = atoi(optarg); break;
     case 'i': NITER = atoi(optarg); break;
     case 't': THRESHOLD = atof(optarg); break;
     case 'd': NDIM = atoi(optarg); break;
     case 'z': Z = atof(optarg); break;
-    case 'u': NU0 = atof(optarg); break;
     case 'p': PHI0 = atof(optarg); break;
+    case 'u': NU0 = atof(optarg); break;
     case 's': SEED = atoi(optarg); break;
-    case 'e': EXPER = atoi(optarg); break;
     case 'c': CALCZ = 1; break;
-    case 'm': VMERGE = 1; vmsg("The -m option is deprecated, please do not use."); break;
     case 'w': WEIGHT = 1; break;
     case 'v': VERBOSE = 1; break;
-    case 'a': PRINTALL = 1; break;
     default: die("%s",usage);
     }
   }
 
-  vmsg("scode -n %d -r %d -i %d -t %g -d %d -z %g -u %g -p %g -s %d %s%s%s",
-      NTOK, RESTART, NITER, THRESHOLD, NDIM, Z, NU0, PHI0, SEED,
-      (CALCZ ? "-c " : ""), (VMERGE ? "-m " : ""), (VERBOSE ? "-v " : ""));
+  vmsg("scode -r %d -i %d -t %g -d %d -z %g -p %g -u %g -s %d %s%s%s",
+       RESTART, NITER, THRESHOLD, NDIM, Z, NU0, PHI0, SEED,
+       (CALCZ ? "-c " : ""), (WEIGHT ? "-w " : ""), (VERBOSE ? "-v " : ""));
 
   init_rng();
   if (SEED) gsl_rng_set(rng_R, SEED);
@@ -127,60 +120,20 @@ int main(int argc, char **argv) {
     vmsg("Restart %d/%d logL1=%g best=%g", 1+start, RESTART, ll, best_logL);
     if (CALCZ) vmsg("Z=%g (approx %g)", calcZ(), Z);
   }
-  if (VMERGE) {			/* output for Maron et.al. 2010 bigram s-code model */
-    /* Actually there is no need for this, a script can do this with normal output. */
+  for (uint32_t t = 0; t < NTOK; t++) {
     for (uint32_t q = 1; q <= qmax; q++) {
-      printf("%s\t%d", sym2str(q), cnt[0][q]);
-      for (uint32_t t = 0; t < NTOK; t++) {
-	assert(best_vec[t][q] != NULL);
-	putchar('\t');
-	svec_print(best_vec[t][q]);
-      }
+      if (best_vec[t][q] == NULL) continue;
+      printf("%d:%s\t%d\t", t, sym2str(q), cnt[t][q]);
+      svec_print(best_vec[t][q]);
       putchar('\n');
-    }
-  } else if(EXPER){
-    fprintf(stderr,"<<<Experimental features: %d X + Y>>>\n", EXPER);
-    for (int di = 0; di < NTUPLE; di++) {
-      sym_t *tar = &val(data, di * NTOK, sym_t);
-      for (uint32_t t = 0; t < NTOK; t++) {
-	int q = tar[t];
-	assert(best_vec[t][q] != NULL);
-	putchar('\t');
-	if (t == 0){                         
-	  svec_mul_print(best_vec[t][q], EXPER);
-	}
-	else{
-	  putchar('\t');
-	  svec_print(best_vec[t][q]);
-	}
-      }
-      putchar('\n');
-    }
-  }
-  else if(PRINTALL){
-    for (uint32_t t = 0; t < NTOK; t++) {
-      for (uint32_t q = 1; q <= qmax; q++) {
-	if (best_vec[t][q] == NULL) continue;
-	printf("%d:%s\t%d\t", t, sym2str(q), cnt[t][q]);
-	svec_print(best_vec[t][q]);
-	putchar('\n');
-      }
-    }
-  }
-  else {			/* regular output */
-    //NTOK is set to 1
-    for (uint32_t t = 0; t < 1; t++) {
-      for (uint32_t q = 1; q <= qmax; q++) {
-	if (best_vec[t][q] == NULL) continue;
-	printf("%d:%s\t%d\t", t, sym2str(q), cnt[t][q]);
-	svec_print(best_vec[t][q]);
-	putchar('\n');
-      }
     }
   }
   fflush(stdout);
   free_data();
   free_rng();
+  if (WEIGHT) free_weight();
+  symtable_free();
+  dfreeall();
   fprintf(stderr, "%f\n", best_logL);
   vmsg("bye");
 }
@@ -204,7 +157,7 @@ double logL() {
 double calcZ() {
   double z = 0;
   for (uint32_t x = 1; x <= qmax; x++) {
-    if (VERBOSE && (x % 1000 == 0)) fprintf(stderr, ".");
+    if (VERBOSE && (x % 1000 == 0)) fputc('.', stderr);
     if (cnt[0][x] == 0) continue;
     float px = frq(0, x);
     svec vx = vec[0][x];
@@ -216,7 +169,7 @@ double calcZ() {
       z += px * py * exp(-xy);
     }
   }
-  if (VERBOSE) fprintf(stderr, "\n");
+  if (VERBOSE) fputc('\n', stderr);
   return z;
 }
 
@@ -225,8 +178,8 @@ void update_tuple(sym_t *t) {
   static svec *u = NULL;
   static svec *v = NULL;
   static svec dx = NULL;
-  if (u == NULL) u = malloc(NTOK * sizeof(svec));
-  if (v == NULL) v = malloc(NTOK * sizeof(svec));
+  if (u == NULL) u = _d_malloc(NTOK * sizeof(svec));
+  if (v == NULL) v = _d_malloc(NTOK * sizeof(svec));
   if (dx == NULL) dx = svec_alloc(NDIM);
   for (int i = 0; i < NTOK; i++) u[i] = vec[i][t[i]];
   for (int i = 0; i < NTOK; i++) {
@@ -274,101 +227,6 @@ void update_tuple(sym_t *t) {
   }
 }
 
-#ifdef OLD
-void update_tuple_old(sym_t *t) {
-  static svec *u = NULL;
-  static svec *v = NULL;
-  static svec dx = NULL;
-  if (u == NULL) u = malloc(NTOK * sizeof(svec));
-  if (v == NULL) v = malloc(NTOK * sizeof(svec));
-  if (dx == NULL) dx = svec_alloc(NDIM);
-  uint32_t tok = NTOK;
-  for (int i = 0; i < tok; i++) u[i] = vec[i][t[i]];
-
-  for (int i = 0; i < tok; i++) {
-
-    /* Sampling values from the marginal distributions. */
-    /* Can this be done once, or do we have to resample for every x? */
-    for (int j = 0; j < tok; j++) {
-      if (j==i) { v[j] = u[i]; continue; }
-      uint32_t r = gsl_rng_uniform_int(rng_R, NTUPLE);
-      sym_t y = g_array_index(data, sym_t, r * NTOK + j);
-      v[j] = vec[j][y];
-    }
-
-    /* Compute sum distance squared and the push coefficient */
-    double d2 = 0;
-    for (int j = 0; j < tok; j++) {
-      for (int k = 0; k < j; k++) {
-	d2 += svec_sqdist(v[k], v[j]);
-      }
-    }
-    double push = exp(-d2) / Z;
-
-    /* Compute the move for u[i] */
-    svec_set_zero(dx);
-    for (int j = 0; j < tok; j++) {
-      if (j == i) continue;
-      for (int d = 0; d < NDIM; d++) {
-	float dxd = svec_get(dx, d);
-	float x = svec_get(u[i], d);
-	float y = svec_get(u[j], d);
-	float z = svec_get(v[j], d);
-	svec_set(dx, d, dxd + (y - x + push * (x - z)));
-      }
-    }
-    
-    /* Apply the move scaled by learning parameter */
-    uint32_t cx = update_cnt[i][t[i]]++;
-    float nx = NU0 * (PHI0 / (PHI0 + cx));
-    svec_scale(dx, nx);
-    svec_add(u[i], dx);
-    svec_normalize(u[i]);
-  }
-}
-
-
-float update_tuple_old(sym_t *t) {
-  sym_t x1 = t[0];
-  sym_t y1 = t[1];
-  uint32_t cx = update_cnt[0][x1]++;
-  uint32_t cy = update_cnt[1][y1]++;
-  float nx = NU0 * (PHI0 / (PHI0 + cx));
-  float ny = NU0 * (PHI0 / (PHI0 + cy));
-  svec vx1 = vec[0][x1];
-  svec vy1 = vec[1][y1];
-  uint32_t rx = gsl_rng_uniform_int(rng_R, NTUPLE);
-  sym_t x2 = g_array_index(data, sym_t, rx * NTOK);
-  uint32_t ry = gsl_rng_uniform_int(rng_R, NTUPLE);
-  sym_t y2 = g_array_index(data, sym_t, ry * NTOK + 1);
-  svec vx2 = vec[0][x2];
-  svec vy2 = vec[1][y2];
-  float x1y2 = svec_sqdist(vx1, vy2);
-  float y1x2 = svec_sqdist(vx2, vy1);
-  float dx = update_svec(vx1, vy1, vy2, x1y2, nx);
-  float dy = update_svec(vy1, vx1, vx2, y1x2, ny);
-  return (dx > dy ? dx : dy);
-}
-
-float update_svec_old(svec x, svec y, svec y2, float xy2, float nx) {
-  float sum_move2 = 0;
-  float sum_x2 = 0;
-  float exy2z = exp(-xy2) / Z;
-  for (int i = x->size - 1; i >= 0; i--) {
-    float xi = svec_get(x, i);
-    float yi = svec_get(y, i);
-    float y2i = svec_get(y2, i);
-    float move = nx * (yi - xi + exy2z * (xi - y2i));
-    xi += move;
-    svec_set(x, i, xi);
-    sum_move2 += move * move;
-    sum_x2 += xi * xi;
-  }
-  svec_scale(x, 1 / sqrt(sum_x2));
-  return sum_move2;
-}
-#endif
-  
 int init_weight(){
   int size = 100, i = 0;
   weight = _d_malloc(size * sizeof(double));
@@ -385,6 +243,10 @@ int init_weight(){
     break;
   }
   return i;
+}
+
+void free_weight() {
+  if (weight != NULL) _d_free(weight);
 }
 
 int init_data() {
@@ -446,19 +308,16 @@ void free_data() {
     }
     _d_free(best_vec[i]);
     _d_free(vec[i]);
-    // _d_free(cnt[i]); // TODO: why is this not here?
+    _d_free(cnt[i]);
     _d_free(update_cnt[i]);
   }
   _d_free(cweight);
   _d_free(uweight);
   svec_free(dummy_vec);
-  /* TODO: why are these not here:
   _d_free(best_vec);
   _d_free(vec);
   _d_free(cnt);
   _d_free(update_cnt);
-  */
-  _d_free(weight); // TODO: this has not been alloced in init_data, do not free here.
   darr_free(data);
 }
 
