@@ -3,4 +3,3 @@
 	* test01.log: Output of the last-glib version using:
 	dyuret@balina:/scratch/3/dyuret/scode$ time zcat bigram.pairs.gz | scode -a -i 50 -r 1 -d 25 -z 0.166 -p 50 -u 0.2 -s 1 -v | gzip > test01.out.gz
 
-	
