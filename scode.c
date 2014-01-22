@@ -22,29 +22,31 @@ const char *usage = "Usage: scode [OPTIONS] < file\n"
   "-w The first line of the input is weights (default false)\n"
   "-v verbose messages (default false)\n";
 
-int RESTART = 1;
-int NITER = UINT32_MAX;
+typedef uint32_t u32;
+typedef uint64_t u64;
+u32 RESTART = 1;
+u32 NITER = UINT32_MAX;
 double THRESHOLD = 0.001;
-int NDIM = 25;
+u32 NDIM = 25;
 double Z = 0.166;
 double PHI0 = 50.0;
 double NU0 = 0.2;
-int SEED = 0;
-int CALCZ = 0;
-int WEIGHT = 0;
-int VERBOSE = 0;
+unsigned long int SEED = 0;
+bool CALCZ = false;
+bool WEIGHT = false;
+bool VERBOSE = false;
 
-int NTOK = -1;
-int NTUPLE = 0;
+u32 NTOK = 0;
+u64 NTUPLE = 0;
 
 const gsl_rng_type *rng_T;
 gsl_rng *rng_R = NULL;
 darr_t data;
-uint32_t **update_cnt;
+u64 **update_cnt;
 double * weight = NULL;
 double * uweight = NULL; /*Updated weights*/
-uint32_t * cweight = NULL; /*Weights Counts*/
-uint32_t **cnt;
+u32 * cweight = NULL; /*Weights Counts*/
+u64 **cnt;
 #define frq(i,j) ((double)cnt[i][j]*NTOK/len(data))
 svec **vec;
 svec **best_vec;
@@ -56,8 +58,8 @@ sym_t NULLFEATID;
 int main(int argc, char **argv);
 void init_rng();
 void free_rng();
-int init_data();
-int init_weight();
+u64 init_data();
+u32 init_weight();
 void free_weight();
 void randomize_vectors();
 void copy_best_vec();
@@ -80,9 +82,9 @@ int main(int argc, char **argv) {
     case 'p': PHI0 = atof(optarg); break;
     case 'u': NU0 = atof(optarg); break;
     case 's': SEED = atoi(optarg); break;
-    case 'c': CALCZ = 1; break;
-    case 'w': WEIGHT = 1; break;
-    case 'v': VERBOSE = 1; break;
+    case 'c': CALCZ = true; break;
+    case 'w': WEIGHT = true; break;
+    case 'v': VERBOSE = true; break;
     default: die("%s",usage);
     }
   }
@@ -95,16 +97,16 @@ int main(int argc, char **argv) {
   if (SEED) gsl_rng_set(rng_R, SEED);
   if (WEIGHT) NTOK = init_weight();
   NTUPLE = init_data();
-  vmsg("Read %d tuples %d uniq tokens", NTUPLE, qmax);
+  vmsg("Read %zu tuples %u uniq tokens", NTUPLE, qmax);
 
   double best_logL = 0;
-  for (int start = 0; start < RESTART; start++) {
+  for (u32 start = 0; start < RESTART; start++) {
     randomize_vectors();
     double ll = logL();
     vmsg("Restart %d/%d logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
     if (CALCZ) vmsg("Z=%g (approx %g)", calcZ(), Z);
-    for (int iter = 0; iter < NITER; iter++) {
-      for (int di = 0; di < NTUPLE; di++) {
+    for (u32 iter = 0; iter < NITER; iter++) {
+      for (u64 di = 0; di < NTUPLE; di++) {
 	update_tuple(&val(data, di * NTOK, sym_t));
       }
       double ll0 = ll;
@@ -120,10 +122,10 @@ int main(int argc, char **argv) {
     vmsg("Restart %d/%d logL1=%g best=%g", 1+start, RESTART, ll, best_logL);
     if (CALCZ) vmsg("Z=%g (approx %g)", calcZ(), Z);
   }
-  for (uint32_t t = 0; t < NTOK; t++) {
-    for (uint32_t q = 1; q <= qmax; q++) {
+  for (u32 t = 0; t < NTOK; t++) {
+    for (sym_t q = 1; q <= qmax; q++) {
       if (best_vec[t][q] == NULL) continue;
-      printf("%d:%s\t%d\t", t, sym2str(q), cnt[t][q]);
+      printf("%u:%s\t%zu\t", t, sym2str(q), cnt[t][q]);
       svec_print(best_vec[t][q]);
       putchar('\n');
     }
@@ -140,7 +142,7 @@ int main(int argc, char **argv) {
 
 double logL() {
   double l = 0;
-  for (int i = 0; i < NTUPLE; i++) {
+  for (u64 i = 0; i < NTUPLE; i++) {
     sym_t *t = &val(data, i * NTOK, sym_t);
     sym_t x = t[0];
     sym_t y = t[1];
@@ -156,12 +158,12 @@ double logL() {
 
 double calcZ() {
   double z = 0;
-  for (uint32_t x = 1; x <= qmax; x++) {
+  for (sym_t x = 1; x <= qmax; x++) {
     if (VERBOSE && (x % 1000 == 0)) fputc('.', stderr);
     if (cnt[0][x] == 0) continue;
     float px = frq(0, x);
     svec vx = vec[0][x];
-    for (uint32_t y = 1; y <= qmax; y++) {
+    for (sym_t y = 1; y <= qmax; y++) {
       if (cnt[1][y] == 0) continue;
       float py = frq(1, y);
       svec vy = vec[1][y];
@@ -181,14 +183,16 @@ void update_tuple(sym_t *t) {
   if (u == NULL) u = _d_malloc(NTOK * sizeof(svec));
   if (v == NULL) v = _d_malloc(NTOK * sizeof(svec));
   if (dx == NULL) dx = svec_alloc(NDIM);
-  for (int i = 0; i < NTOK; i++) u[i] = vec[i][t[i]];
-  for (int i = 0; i < NTOK; i++) {
+  for (u32 i = 0; i < NTOK; i++) u[i] = vec[i][t[i]];
+  for (u32 i = 0; i < NTOK; i++) {
     /* Sampling values from the marginal distributions. */
     /* Can this be done once, or do we have to resample for every x? */
     if(i > 0 && t[i] == NULLFEATID) continue;
-    for (int j = 0; j < NTOK; j++) {
+    for (u32 j = 0; j < NTOK; j++) {
       if (j==i) { v[j] = u[i]; continue;}
-      uint32_t r = gsl_rng_uniform_int(rng_R, NTUPLE);
+      u64 r = gsl_rng_get(rng_R);
+      r = (r << 32) | gsl_rng_get(rng_R);
+      r = r % NTUPLE;
       sym_t y = val(data, r * NTOK + j, sym_t);
       v[j] = vec[j][y];
       if(i > 0) break;
@@ -196,7 +200,7 @@ void update_tuple(sym_t *t) {
     /* Compute the move for u[i] */
     svec_set_zero(dx);
     double ww;
-    for (int j = 0; j < NTOK; j++) {
+    for (u32 j = 0; j < NTOK; j++) {
       if (j == i) continue;
       ww = weight == NULL ? 1 : (i > 0 ? weight[i] : weight[j]);
       double push = 0, pull = 0;
@@ -205,7 +209,7 @@ void update_tuple(sym_t *t) {
       if(u[j] == NULL)  u[j] = dummy_vec;
       else pull = 1;
       if(push != 0 || pull != 0){
-	for (int d = 0; d < NDIM; d++) {                    
+	for (u32 d = 0; d < NDIM; d++) {                    
 	  float dxd = svec_get(dx, d);
 	  float x = svec_get(u[i], d);
 	  float y = svec_get(u[j], d);
@@ -219,7 +223,7 @@ void update_tuple(sym_t *t) {
       if(i > 0) break;
       }
     /* Apply the move scaled by learning parameter */
-    uint32_t cx = update_cnt[i][t[i]]++;
+    u64 cx = update_cnt[i][t[i]]++;
     float nx = NU0 * (PHI0 / (PHI0 + cx));
     svec_scale(dx, nx);
     svec_add(u[i], dx);
@@ -227,8 +231,8 @@ void update_tuple(sym_t *t) {
   }
 }
 
-int init_weight(){
-  int size = 100, i = 0;
+u32 init_weight(){
+  u32 size = 100, i = 0;
   weight = _d_malloc(size * sizeof(double));
   forline (buf, NULL) {
     fortok (tok, buf) {
@@ -249,11 +253,11 @@ void free_weight() {
   if (weight != NULL) _d_free(weight);
 }
 
-int init_data() {
+u64 init_data() {
   qmax = 0;
   data = darr(0, sym_t);
   forline (buf, NULL) {
-    size_t ntok = 0;
+    u32 ntok = 0;
     fortok (tok, buf) {
       sym_t q = str2sym(tok, true);
       if (q > qmax) qmax = q;
@@ -261,7 +265,7 @@ int init_data() {
       if(strcmp(tok, NULLFEATMARKER) == 0) NULLFEATID = q;
       ntok++;
     }
-    if(NTOK == -1) NTOK = ntok;
+    if(NTOK == 0) NTOK = ntok;
     assert(ntok == NTOK); //Each line has equal number of tokens
   }
   assert(NTOK > 0);
@@ -272,18 +276,18 @@ int init_data() {
   dummy_vec = svec_alloc(NDIM);
   svec_zero(dummy_vec);
   uweight = _d_calloc(NTOK, sizeof(double));
-  cweight = _d_calloc(NTOK, sizeof(uint32_t));
-  for (int i = 0; i < NTOK; i++) {
-    update_cnt[i] = _d_calloc(qmax+1, sizeof(uint32_t));
-    cnt[i] = _d_calloc(qmax+1, sizeof(uint32_t));
+  cweight = _d_calloc(NTOK, sizeof(u32));
+  for (u32 i = 0; i < NTOK; i++) {
+    update_cnt[i] = _d_calloc(qmax+1, sizeof(u64));
+    cnt[i] = _d_calloc(qmax+1, sizeof(u64));
     vec[i] = _d_calloc(qmax+1, sizeof(svec));
     best_vec[i] = _d_calloc(qmax+1, sizeof(svec));
   }
-  int N = len(data) / NTOK;
-  for (int i = 0; i < N; i++) {
+  u64 N = len(data) / NTOK;
+  for (u64 i = 0; i < N; i++) {
     sym_t *p = &val(data, i * NTOK, sym_t);
-    for (int j = 0; j < NTOK; j++) {
-      int k = p[j];
+    for (u32 j = 0; j < NTOK; j++) {
+      sym_t k = p[j];
       assert(k <= qmax);
       cnt[j][k]++;
       if(k == NULLFEATID){
@@ -299,8 +303,8 @@ int init_data() {
 }
 
 void free_data() {
-  for (int i = 0; i < NTOK; i++) {
-    for (int j = 0; j <= qmax; j++) {
+  for (u32 i = 0; i < NTOK; i++) {
+    for (sym_t j = 0; j <= qmax; j++) {
       if (vec[i][j] != NULL) {
 	svec_free(vec[i][j]);
 	svec_free(best_vec[i][j]);
@@ -322,8 +326,8 @@ void free_data() {
 }
 
 void randomize_vectors() {
-  for (int j = 0; j < NTOK; j++) {
-    for (uint32_t q = 1; q <= qmax; q++) {
+  for (u32 j = 0; j < NTOK; j++) {
+    for (sym_t q = 1; q <= qmax; q++) {
       if (vec[j][q] != NULL) {
 	svec_randomize(vec[j][q]);
 	update_cnt[j][q] = 0;
@@ -333,8 +337,8 @@ void randomize_vectors() {
 }
 
 void copy_best_vec() {
-  for (int j = 0; j < NTOK; j++) {
-    for (uint32_t q = 1; q <= qmax; q++) {
+  for (u32 j = 0; j < NTOK; j++) {
+    for (sym_t q = 1; q <= qmax; q++) {
       if (vec[j][q] != NULL) {
 	svec_memcpy(best_vec[j][q], vec[j][q]);
       }
@@ -344,7 +348,7 @@ void copy_best_vec() {
 
 void init_rng() {
   gsl_rng_env_setup();
-  rng_T = gsl_rng_default;
+  rng_T = gsl_rng_mt19937;
   rng_R = gsl_rng_alloc(rng_T);
 }
 
