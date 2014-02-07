@@ -45,7 +45,6 @@ darr_t data;
 u64 **update_cnt;
 double * weight = NULL;
 double * uweight = NULL; /*Updated weights*/
-u32 * cweight = NULL; /*Weights Counts*/
 u64 **cnt;
 #define frq(i,j) ((double)cnt[i][j]*NTOK/len(data))
 svec **vec;
@@ -90,7 +89,7 @@ int main(int argc, char **argv) {
   }
 
   vmsg("scode -r %d -i %d -t %g -d %d -z %g -p %g -u %g -s %d %s%s%s",
-       RESTART, NITER, THRESHOLD, NDIM, Z, NU0, PHI0, SEED,
+       RESTART, NITER, THRESHOLD, NDIM, Z, PHI0, NU0, SEED,
        (CALCZ ? "-c " : ""), (WEIGHT ? "-w " : ""), (VERBOSE ? "-v " : ""));
 
   init_rng();
@@ -276,7 +275,6 @@ u64 init_data() {
   dummy_vec = svec_alloc(NDIM);
   svec_zero(dummy_vec);
   uweight = _d_calloc(NTOK, sizeof(double));
-  cweight = _d_calloc(NTOK, sizeof(u32));
   for (u32 i = 0; i < NTOK; i++) {
     update_cnt[i] = _d_calloc(qmax+1, sizeof(u64));
     cnt[i] = _d_calloc(qmax+1, sizeof(u64));
@@ -315,7 +313,6 @@ void free_data() {
     _d_free(cnt[i]);
     _d_free(update_cnt[i]);
   }
-  _d_free(cweight);
   _d_free(uweight);
   svec_free(dummy_vec);
   _d_free(best_vec);
