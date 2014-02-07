@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  vmsg("scode -r %d -i %d -t %g -d %d -z %g -p %g -u %g -s %d %s%s%s",
+  vmsg("scode -r %u -i %u -t %g -d %u -z %g -p %g -u %g -s %lu %s%s%s",
        RESTART, NITER, THRESHOLD, NDIM, Z, PHI0, NU0, SEED,
        (CALCZ ? "-c " : ""), (WEIGHT ? "-w " : ""), (VERBOSE ? "-v " : ""));
 
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
   for (u32 start = 0; start < RESTART; start++) {
     randomize_vectors();
     double ll = logL();
-    vmsg("Restart %d/%d logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
+    vmsg("Restart %u/%u logL0=%g best=%g", 1+start, RESTART, ll, best_logL);
     if (CALCZ) vmsg("Z=%g (approx %g)", calcZ(), Z);
     for (u32 iter = 0; iter < NITER; iter++) {
       for (u64 di = 0; di < NTUPLE; di++) {
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
       }
       double ll0 = ll;
       ll = logL();
-      vmsg("Iteration %d/%d logL=%g", 1+iter, NITER, ll);
+      vmsg("Iteration %u/%u logL=%g", 1+iter, NITER, ll);
       if (ll - ll0 <= THRESHOLD) break;
     }
     if (start == 0 || ll > best_logL) {
@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
       best_logL = ll;
       copy_best_vec();
     }
-    vmsg("Restart %d/%d logL1=%g best=%g", 1+start, RESTART, ll, best_logL);
+    vmsg("Restart %u/%u logL1=%g best=%g", 1+start, RESTART, ll, best_logL);
     if (CALCZ) vmsg("Z=%g (approx %g)", calcZ(), Z);
   }
   for (u32 t = 0; t < NTOK; t++) {
