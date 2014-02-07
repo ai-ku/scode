@@ -1,5 +1,6 @@
 CC=gcc
-CFLAGS=-O3 -D_GNU_SOURCE -Wall -std=c99 -pedantic
+#CFLAGS=-O3 -D_GNU_SOURCE -Wall -std=c99 -pedantic
+CFLAGS=-O3 -DNDEBUG -D_POSIX_C_SOURCE=200809L -Wall -std=c99 -pedantic
 LIBS=-lm -lgsl -lgslcblas
 
 scode: scode.o svec.o dlib.o
