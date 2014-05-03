@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
   for (u32 t = 0; t < NTOK; t++) {
     for (sym_t q = 1; q <= qmax; q++) {
       if (best_vec[t][q] == NULL) continue;
-      printf("%u:%s\t%llu\t", t, sym2str(q), cnt[t][q]);
+      printf("%u:%s\t%zu\t", t, sym2str(q), cnt[t][q]);
       svec_print(best_vec[t][q]);
       putchar('\n');
     }
@@ -260,7 +260,8 @@ u64 init_data() {
     fortok (tok, buf) {
       sym_t q = str2sym(tok, true);
       if (q > qmax) qmax = q;
-      val(data, len(data), sym_t) = q;
+      size_t lendata = len(data);
+      val(data, lendata, sym_t) = q;
       if(strcmp(tok, NULLFEATMARKER) == 0) NULLFEATID = q;
       ntok++;
     }
