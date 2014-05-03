@@ -22,8 +22,8 @@ const char *usage = "Usage: scode [OPTIONS] < file\n"
   "-w The first line of the input is weights (default false)\n"
   "-v verbose messages (default false)\n";
 
-typedef uint32_t u32;
-typedef uint64_t u64;
+//typedef uint32_t u32;
+//typedef uint64_t u64;
 u32 RESTART = 1;
 u32 NITER = UINT32_MAX;
 double THRESHOLD = 0.001;
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
   for (u32 t = 0; t < NTOK; t++) {
     for (sym_t q = 1; q <= qmax; q++) {
       if (best_vec[t][q] == NULL) continue;
-      printf("%u:%s\t%zu\t", t, sym2str(q), cnt[t][q]);
+      printf("%u:%s\t%llu\t", t, sym2str(q), cnt[t][q]);
       svec_print(best_vec[t][q]);
       putchar('\n');
     }
