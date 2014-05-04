@@ -1,5 +1,8 @@
+*~
 *.o
 scode
 scode-online
+scode-logl
 test*
+foo*
 unused/
