@@ -8,7 +8,7 @@
 
 /*** Command line options */
 
-const char *usage = "Usage: scode-omp [OPTIONS] < file\n"
+const char *usage = "Usage: scode-online [OPTIONS] < file\n"
   "file should have tab separated columns of arbitrary tokens\n"
   "-d NDIM: number of dimensions (default 25)\n"
   "-z Z: partition function approximation (default 0.166)\n"
@@ -34,7 +34,7 @@ bool VERBOSE = false;
 
 typedef struct svec_s {
   char *key;
-  u64 cnt;
+  size_t cnt;
   float *vec;
 } *svec_t;
 
@@ -186,33 +186,46 @@ void get_options(int argc, char **argv) {
     default: die("%s",usage);
     }
   }
-  vmsg("scode-omp -d %u -z %g -p %g -u %g -s %lu -m %lu %s",
-       NDIM, Z, PHI0, ETA0, SEED, MAXHIST, (VERBOSE ? "-v " : ""));
 }
 
+
 /* This defines a hash table for svec_t and sget(), see dlib.h for details. */
-#define svec_new(k) ((struct svec_s) { strdup(k), 0, rand_unit_vector(NDIM) })
-D_HASH(s, struct svec_s, char *, d_keyof, d_strmatch, fnv1a, svec_new, d_keyisnull, d_keymknull)
+
+static svec_t svec_new(const char *key) {
+  svec_t s = malloc(sizeof(struct svec_s));
+  s->key = strdup(key);
+  s->cnt = 0;
+  s->vec = rand_unit_vector(NDIM);
+  return s;
+}
+
+#define svec_key(s) ((s)->key)
+#define svec(h,k) (*sget(h,k,true))
+
+D_HASH(s, svec_t, char *, svec_key, d_strmatch, fnv1a, svec_new, d_isnull, d_mknull)
 
 
 /*** main() */
 
 int main(int argc, char **argv) {
   get_options(argc, argv);
+  vmsg("scode-online -d %u -z %g -p %g -u %g -s %lu -m %lu %s",
+       NDIM, Z, PHI0, ETA0, SEED, MAXHIST, (VERBOSE ? "-v " : ""));
   srand(SEED);
-  darr_t *v;			// hash tables of embedding vectors
-  darr_t *m;			// arrays to sample from marginals
-  svec_t *x;			// last tuple read
-  char **toks;			// tokens on last line
+  darr_t *v = NULL;		// hash tables of embedding vectors
+  darr_t *m = NULL;		// arrays to sample from marginals
+  svec_t *x = NULL;		// last tuple read
+  char **toks = NULL;		// tokens on last line
   size_t ntok = 0;		// number of tokens on each line
   size_t len1 = 0;		// strlen of first line
   
   forline (line, NULL) {	// Process input
+    line[strlen(line)-1] = 0;	// chop newline
     if (len1 == 0) {
       len1 = strlen(line);
       toks = malloc(len1 * sizeof(char *));
     }
-    size_t n = split(line, "\t\n", toks, len1);
+    size_t n = split(line, "\t", toks, len1);
     if (ntok == 0) {		// Alloc if first line
       ntok = n;
       assert(ntok > 1);
@@ -220,7 +233,7 @@ int main(int argc, char **argv) {
       v = malloc(ntok * sizeof(darr_t));
       m = malloc(ntok * sizeof(darr_t));
       for (size_t i = 0; i < ntok; i++) {
-	v[i] = darr(0, struct svec_s);
+	v[i] = darr(0, svec_t);
 	m[i] = darr(0, svec_t);
       }
     }
@@ -229,26 +242,30 @@ int main(int argc, char **argv) {
       if (*toks[i] == '\0') {
 	x[i] = NULL;
       } else {
-	x[i] = sget(v[i], toks[i], true);
+	x[i] = svec(v[i], toks[i]);
 	x[i]->cnt++;
       }
     }
     scode(x, m, NDIM, ntok);
   }
 
+  vmsg("Writing...");
   for (size_t i = 0; i < ntok; i++) { // Print and free
-    forhash (struct svec_s, s, v[i], d_keyisnull) {
-      printf("%zu:%s\t%llu", i, s->key, s->cnt);
+    forhash (svec_t, sptr, v[i], d_isnull) {
+      svec_t s = *sptr;
+      printf("%zu:%s\t%zu", i, s->key, s->cnt);
       for (size_t j = 0; j < NDIM; j++) {
 	printf("\t%g", s->vec[j]);
       }
       putchar('\n');
       free(s->key);
       free(s->vec);
+      free(s);
     }
     darr_free(v[i]);
     darr_free(m[i]);
   }
   free(v); free(m); free(x); free(toks);
+  vmsg("done");
 }
 
