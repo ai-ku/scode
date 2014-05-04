@@ -16,7 +16,7 @@ const char *usage = "Usage: scode [OPTIONS] < file\n"
   "-d NDIM: number of dimensions (default 25)\n"
   "-z Z: partition function approximation (default 0.166)\n"
   "-p PHI0: learning rate parameter (default 50.0)\n"
-  "-u NU0: learning rate parameter (default 0.2)\n"
+  "-u ETA0: learning rate parameter (default 0.2)\n"
   "-s SEED: random seed (default 0)\n"
   "-c calculate real Z (default false)\n"
   "-w The first line of the input is weights (default false)\n"
@@ -30,7 +30,7 @@ double THRESHOLD = 0.001;
 u32 NDIM = 25;
 double Z = 0.166;
 double PHI0 = 50.0;
-double NU0 = 0.2;
+double ETA0 = 0.2;
 unsigned long int SEED = 0;
 bool CALCZ = false;
 bool WEIGHT = false;
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     case 'd': NDIM = atoi(optarg); break;
     case 'z': Z = atof(optarg); break;
     case 'p': PHI0 = atof(optarg); break;
-    case 'u': NU0 = atof(optarg); break;
+    case 'u': ETA0 = atof(optarg); break;
     case 's': SEED = atoi(optarg); break;
     case 'c': CALCZ = true; break;
     case 'w': WEIGHT = true; break;
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
   }
 
   vmsg("scode -r %u -i %u -t %g -d %u -z %g -p %g -u %g -s %lu %s%s%s",
-       RESTART, NITER, THRESHOLD, NDIM, Z, PHI0, NU0, SEED,
+       RESTART, NITER, THRESHOLD, NDIM, Z, PHI0, ETA0, SEED,
        (CALCZ ? "-c " : ""), (WEIGHT ? "-w " : ""), (VERBOSE ? "-v " : ""));
 
   init_rng();
@@ -223,7 +223,7 @@ void update_tuple(sym_t *t) {
       }
     /* Apply the move scaled by learning parameter */
     u64 cx = update_cnt[i][t[i]]++;
-    float nx = NU0 * (PHI0 / (PHI0 + cx));
+    float nx = ETA0 * (PHI0 / (PHI0 + cx));
     svec_scale(dx, nx);
     svec_add(u[i], dx);
     svec_normalize(u[i]);
