@@ -1,3 +1,21 @@
+2014-05-04  Deniz Yuret  <dyuret@ku.edu.tr>
+
+	* scode-online, scode-logl: To test scode vs. scode-online both
+	were trained on wordsub.pairs from upos for 10 iterations and
+	default options with the following results:
+
+	balina:scode[12:44:53(14)]$ scode-logl foo.scode.out < wordsub.pairs 
+	[0.00s 48 6,811,648b] Reading foo.scode.out...
+	[0.89s 1,581,120 27,406,336b] [0]: v=49206 n=14085192 z=0
+	[34m36.87s 1,581,120 27,406,336b] [1]: v=59405 n=14085192 z=0.162745
+	[34m52.08s 1,581,072 27,410,432b] nline=14085192 logL=-12.7828
+
+	balina:scode[12:47:08(0)]$ scode-logl foo.scode-online.out < wordsub.pairs 
+	[0.00s 48 6,811,648b] Reading foo.scode-online.out...
+	[0.82s 1,581,120 27,406,336b] [0]: v=49206 n=140851920 z=0
+	[16m28.37s 1,581,120 27,406,336b] [1]: v=59405 n=140851920 z=0.162726
+	[16m43.23s 1,581,072 27,410,432b] nline=14085192 logL=-12.7807
+
 2014-01-12  Deniz Yuret  <dyuret@ku.edu.tr>
 
 	* test01.log: Output of the last-glib version using:
