@@ -1,19 +1,5 @@
 SCODE    		          Copyright (c) 2012-2014 Deniz Yuret
 
-Usage: scode [OPTIONS] < file
-  file should have columns of arbitrary tokens
-  -r RESTART: number of restarts (default 1)
-  -i NITER: number of iterations over data (default UINT32_MAX)
-  -t THRESHOLD: quit if logL increase for iter <= this (default .001)
-  -d NDIM: number of dimensions (default 25)
-  -z Z: partition function approximation (default 0.166)
-  -p PHI0: learning rate parameter (default 50.0)
-  -u NU0: learning rate parameter (default 0.2)
-  -s SEED: random seed (default 0)
-  -c calculate real Z (default false)
-  -w The first line of the input is weights (default false)
-  -v verbose messages (default false)
-
 Algorithm: Let X and Y be two categorical variables with finite
 cardinalities |X| and |Y|. We observe a set of pairs {xi, yi} drawn
 IID from the joint distribution of X and Y. The basic idea behind CODE
@@ -26,15 +12,79 @@ Please see the following papers for a description.
 
 * Amir Globerson, Gal Chechik, Fernando Pereira and Naftali
 Tishby. Euclidean Embedding of Co-Occurrence Data. Journal of Machine
-Learning Research 8 (Oct), p.2265-2295, 2007.
+Learning Research 8 (Oct), p.2265-2295, 2007.  See Eq. 2, the MM
+likelihood which scode maximizes, and Sec. 6.2 for the multivariable
+extension.
 
 * Yariv Maron, Michael Lamar, Elie Bienenstock. Sphere Embedding: An
-application to unsupervised POS tagging. (NIPS 2010)
+application to unsupervised POS tagging. (NIPS 2010)  See Eq. 10, 11,
+12 for the update rule implemented by scode.
 
 * Mehmet Ali Yatbaz, Enis Sert, and Deniz Yuret. 2012. Learning
 Syntactic Categories Using Paradigmatic Representations of Word
-Context. EMNLP 2012.
+Context. EMNLP 2012.  Achieves state-of-the-art (80% accuracy) results
+in unsupervised part-of-speech induction for English.
 
-Please see the file LICENSE for terms of use.  To compile you need the
+
+Usage: scode [OPTIONS] < file
+  file should have columns of arbitrary tokens
+  -r RESTART: number of restarts (default 1)
+  -i NITER: number of iterations over data (default UINT32_MAX)
+  -t THRESHOLD: quit if logL increase for iter <= this (default .001)
+  -d NDIM: number of dimensions (default 25)
+  -z Z: partition function approximation (default 0.166)
+  -p PHI0: learning rate parameter (default 50.0)
+  -u ETA0: learning rate parameter (default 0.2)
+  -s SEED: random seed (default 0)
+  -c calculate real Z (default false)
+  -w The first line of the input is weights (default false)
+  -v verbose messages (default false)
+
+The input format is:
+
+token1 <tab> token2 <tab> ... token_n <newline>
+
+The output format is:
+
+index:token <tab> count <tab> v1 <tab> v2 <tab> ... v_n <newline>
+
+where index is the column (0, 1, 2, ...) where the token has been
+observed, count is the number of times it was observed, and
+[v1,v2,...] is its vector embedding.  To compile scode you need the
 gsl library.  Otherwise everything is standard C, so just typing make
 should give you an executable.
+
+
+Other executables:
+
+scode-online [options] < file: A complete rewrite of scode to avoid
+memory problems with very large datasets.  scode-online performs
+vector updates on the fly and does not store the training set in
+memory.  The output format is similar to scode.  The gsl dependencies
+in the code have been removed, everything is standard C.  Interface
+differences with scode: Options like -r, -i, -t does not make sense
+and have been removed, scode-online stops and prints its output when
+the input runs out.  To simulate -r, run scode-online multiple times
+with different seeds.  To simulate -i, feed the training file to stdin
+multiple times (see the script "ncat" below).  The counts will be
+different from the scode output in this case because scode-online does
+not know you are repeating the same data.  Option -c to calculate the
+real Z have been removed, use scode-logl for that.  Option -w to give
+different weights to different columns have been removed, all weights
+are assumed to be 1.  A column in a training file (except the first)
+can be empty, in which case it is skipped (empty fields were denoted
+with /XX/ in original scode).  To support empty columns the training
+file is split strictly at single tab characters (after the last
+character of the line, '\n' has been removed).  Multiple tabs denote
+multiple empty fields, spaces act as regular data.
+
+ncat 10 file | scode-online > model: ncat writes the file to stdout n
+times.  Useful when you want scode-online to go through the training
+set multiple times.
+
+scode-logl model < file: Computes the average log-likelihood of the
+data in file given the model output by scode or scode-online.  Most of
+the computation is performed to calculate the real Z, which takes
+about 450 seconds for two columns each with 50K vocabulary.
+
+
