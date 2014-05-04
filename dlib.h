@@ -339,25 +339,27 @@ Oh well, don't do it.
 
 */
 
-#define val(_a,_i,_t) (((_t*)(_d_boundcheck((_a),(_i),sizeof(_t))->data))[_i])
+#define val(_a,_i,_t) (*((_t*)_d_boundcheck((_a),(_i),sizeof(_t))))
 
 #define _d_dblcap(a) ((a)->bits += (1ULL << _D_LENBITS))
 #define _d_inclen(a) ((a)->bits++)
 #define _d_setlen(a,l) ((a)->bits = ((((a)->bits >> _D_LENBITS) << _D_LENBITS) | (l)))
 
-static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
-  if (i < len(a)) return a;
-  if (i >= (1ULL << _D_LENBITS))
-    die("darr_t cannot hold more than %lu elements.", (1ULL<<_D_LENBITS));
-  _d_setlen(a, i + 1);
-  size_t c = cap(a);
-  if (i < c) return a;
-  do {
-    c <<= 1;
-    _d_dblcap(a);
-  } while (i >= c);
-  a->data = _d_realloc(a->data, c * esize);
-  return a;
+static inline ptr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
+  if (i >= len(a)) {
+    if (i >= (1ULL << _D_LENBITS))
+      die("darr_t cannot hold more than %lu elements.", (1ULL<<_D_LENBITS));
+    _d_setlen(a, i + 1);
+    size_t c = cap(a);
+    if (i >= c) {
+      do {
+	c <<= 1;
+	_d_dblcap(a);
+      } while (i >= c);
+      a->data = _d_realloc(a->data, c * esize);
+    }
+  }
+  return (((char *)(a->data)) + i * esize);
 }
 
 /** Hash tables
@@ -524,10 +526,10 @@ extern size_t fnv1a(const char *k);
 
 /* These use the old interface
 #define D_STRHASH(h, etype, einit) \
-  D_HASH(h, etype, str_t, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
+  D_HASH(h, etype, str_t, d_keyof, d_strmatch, fnv1a, einit, d_keyisnull, d_keymknull)
 
 #define D_STRSET(h) \
-  D_HASH(h, str_t, str_t, d_strmatch, fnv1a, d_ident, dstrdup, d_isnull, d_mknull)
+  D_HASH(h, str_t, str_t, d_ident, d_strmatch, fnv1a, dstrdup, d_isnull, d_mknull)
 */
 
 /* symbol table: symbols are represented with uint32_t > 0.  str2sym
