@@ -47,9 +47,10 @@ void _d_error(int status, int errnum, const char *format, ...) {
   putc(' ', stderr);
   char *tok[23];
   forline(l, "/proc/self/stat") {
-    split(l, " ", tok, 23); break;
+    split(l, " ", tok, 23); 
+    _d_error_mem(strtoul(tok[22], NULL, 10));
+    break;
   }
-  _d_error_mem(strtoul(tok[22], NULL, 10));
   putc('b', stderr);
 #endif // _NO_PROC
   fputs("] ", stderr);
@@ -369,3 +370,13 @@ void darr_free(darr_t a) {
   _d_free(a->data); _d_free(a);
 }
 
+/* darr dbg code: to use len, cap, val in debugger */
+
+size_t dbglen(darr_t a) { return len(a); }
+size_t dbgcap(darr_t a) { return cap(a); }
+
+ptr_t dbgval(darr_t a, size_t i, size_t sz) {
+  if (i >= len(a)) return NULL;
+  char *d = a->data;
+  return &d[i * sz];
+}
