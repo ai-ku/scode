@@ -31,4 +31,4 @@ dlib.o: dlib.c dlib.h
 	$(CC) -c $(CFLAGS) $< -o $@
 
 clean:
-	-rm *.o scode scode-online
+	-rm *.o scode scode-online scode-logl
