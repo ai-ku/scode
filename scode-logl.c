@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
     nline++;
     line[strlen(line)-1] = 0;	// chop newline
     size_t ntok = split(line, "\t", toks, m->ntok);
-    assert(ntok == m->ntok);
+    if (ntok != m->ntok) die("Wrong number of columns.");
     for (size_t i = 0; i < m->ntok; i++) {
       if (*toks[i] == '\0') {
 	x[i] = NULL;
