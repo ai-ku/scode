@@ -1,9 +1,12 @@
+// TODO: print average logl for -v2
+// figure out xargs, ncat, repeat etc.
+
 #include <stdio.h>
 #include <unistd.h>
 #include <assert.h>
 #include <math.h>
-
 #include "dlib.h"
+#include "scode-model.h"
 #define vmsg(...) if(VERBOSE)msg(__VA_ARGS__)
 
 /*** Command line options */
@@ -15,42 +18,56 @@ const char *usage = "Usage: scode-online [OPTIONS] < file\n"
   "-p PHI0: learning rate parameter (default 50.0)\n"
   "-u ETA0: learning rate parameter (default 0.2)\n"
   "-s SEED: random seed (default 1)\n"
-  "-m MAXHIST: max number of tokens to remember (default 1e6)\n"
-  "-v verbose messages (default false)\n";
+  "-m MODEL: model file to initialize with (default none)\n"
+  "-n MAXHIST: max number of tokens to remember (default 1e6)\n"
+  "-v VERBOSE: 0 (default) nothing, 1 dots, 2 logl\n";
 
 size_t NDIM = 25;
 double Z = 0.166;
 double PHI0 = 50.0;
 double ETA0 = 0.2;
 unsigned SEED = 1;
+char *MODEL = NULL;
 size_t MAXHIST = 1e6;
-bool VERBOSE = false;
+int VERBOSE = 0;
+size_t NTOK = 2; // read from input
 
+void get_options(int argc, char **argv) {
+  int opt;
+  while((opt = getopt(argc, argv, "d:z:p:u:s:m:n:v:")) != -1) {
+    switch(opt) {
+    case 'd': NDIM = atoi(optarg); break;
+    case 'z': Z = atof(optarg); break;
+    case 'p': PHI0 = atof(optarg); break;
+    case 'u': ETA0 = atof(optarg); break;
+    case 's': SEED = atoi(optarg); break;
+    case 'm': MODEL = optarg; break;
+    case 'n': MAXHIST = atoi(optarg); break;
+    case 'v': VERBOSE = atoi(optarg); break;
+    default: die("%s",usage);
+    }
+  }
+}
 
-/*** svec_t: vectors on unit sphere representing tokens.  svec_t is a
- pointer to a struct that contains a token string, its count, and its
- vector.  The vectors are unit-length, NDIM dimensional, float
- arrays. */
-
-typedef struct svec_s {
-  char *key;
-  size_t cnt;
-  float *vec;
-} *svec_t;
-
+#define vmsg_options() \
+  vmsg("scode-online -d %u -z %g -p %g -u %g -s %lu -m %s -n %lu -v %d", \
+       NDIM, Z, PHI0, ETA0, SEED, (MODEL ? MODEL : "NULL"), MAXHIST, VERBOSE);
 
 /*** Helper functions */
 
 svec_t rand_token(darr_t m, svec_t x);
-double d2(float *x, float *y, size_t ndim);
-float *normalize(float *x, size_t ndim);
 float *rand_unit_vector(size_t ndim);
 
 
 /*** S-CODE Algorithm */
 
-void scode(svec_t x[], darr_t marginal[], size_t ndim, size_t ntok)
-{
+void scode(svec_t x[], darr_t marginal[]) {
+  static svec_t *r = NULL;
+  static float *dx0 = NULL;
+  if (r == NULL) r = malloc(NTOK * sizeof(svec_t));
+  if (dx0 == NULL) dx0 = malloc(NDIM * sizeof(float));
+  for (size_t i = 0; i < NDIM; i++) dx0[i] = 0;
+
   /* x[0]..x[ntok-1] are svecs for the last tuple observed.  We are
      going to update their vectors based on the multivariate extension
      (Glob07, Sec 6.2) of the S-CODE algorithm (Maron10). The first
@@ -60,8 +77,7 @@ void scode(svec_t x[], darr_t marginal[], size_t ndim, size_t ntok)
      unobserved features, those are skipped. */
 
   assert(x[0] != NULL);
-  svec_t *r = malloc(ntok * sizeof(svec_t));
-  for (size_t i = 0; i < ntok; i++) {
+  for (size_t i = 0; i < NTOK; i++) {
     r[i] = (x[i] == NULL ? NULL : rand_token(marginal[i], x[i]));
   }
 
@@ -77,52 +93,24 @@ void scode(svec_t x[], darr_t marginal[], size_t ndim, size_t ntok)
      (x0,x2), etc.  Note that x0 has special status, it has ntok-1
      updates which we accumulate in vector dx0. */     
 
-  float *dx0 = calloc(ndim, sizeof(float));
-  for (size_t i = 1; i < ntok; i++) {
+  for (size_t i = 1; i < NTOK; i++) {
     if (x[i] == NULL) continue;
     double ei = ETA0 * PHI0 / (PHI0 + x[i]->cnt);
-    double zi = exp(-d2(x[i]->vec, r[0]->vec, ndim)) / Z;
-    double z0 = exp(-d2(x[0]->vec, r[i]->vec, ndim)) / Z;
-    for (size_t j = 0; j < ndim; j++) {
+    double zi = exp(-d2(x[i]->vec, r[0]->vec, NDIM)) / Z;
+    double z0 = exp(-d2(x[0]->vec, r[i]->vec, NDIM)) / Z;
+    for (size_t j = 0; j < NDIM; j++) {
       x[i]->vec[j] += ei * (x[0]->vec[j] - x[i]->vec[j] + 
 			    zi * (x[i]->vec[j] - r[0]->vec[j]));
       dx0[j] += (x[i]->vec[j] - x[0]->vec[j] +
 		 z0 * (x[0]->vec[j] - r[i]->vec[j]));
     }
-    normalize(x[i]->vec, ndim);
+    normalize(x[i]->vec, NDIM);
   }
   double e0 = ETA0 * PHI0 / (PHI0 + x[0]->cnt);
-  for (size_t j = 0; j < ndim; j++) {
+  for (size_t j = 0; j < NDIM; j++) {
     x[0]->vec[j] += e0 * dx0[j];
   }
-  normalize(x[0]->vec, ndim);
-  free(dx0);
-  free(r);
-}
-
-/* d2(x, y, ndim) returns the squared distance between two ndim
-   dimensional vectors x and y. */
-
-double d2(float *x, float *y, size_t ndim) {
-  double ans = 0;
-  for (size_t j = 0; j < ndim; j++) {
-    double dj = x[j] - y[j];
-    ans += dj * dj;
-  }
-  return ans;
-}
-
-/* normalize(x, ndim) scales the ndim dimensional vector x to unit
-   size. */
-
-float *normalize(float *x, size_t ndim) {
-  double s = 0;
-  for (size_t j = 0; j < ndim; j++) 
-    s += x[j] * x[j];
-  s = sqrt(s);
-  for (size_t j = 0; j < ndim; j++) 
-    x[j] /= s;
-  return x;
+  normalize(x[0]->vec, NDIM);
 }
 
 /* rand_token() first adds the observed token x to the marginal
@@ -154,7 +142,7 @@ svec_t rand_token(darr_t m, svec_t x) {
 #define TWO_PI 6.2831853071795864769252866
  
 float *rand_unit_vector(size_t ndim) {
-  float *r = malloc(ndim * sizeof(float));
+  float *r = _d_malloc(ndim * sizeof(float));
   double rand1 = 0;
   double rand2 = 0;
   for (size_t i = 0; i < ndim; i++) {
@@ -172,100 +160,97 @@ float *rand_unit_vector(size_t ndim) {
   return normalize(r, ndim);
 }
 
-void get_options(int argc, char **argv) {
-  int opt;
-  while((opt = getopt(argc, argv, "d:z:p:u:s:m:v")) != -1) {
-    switch(opt) {
-    case 'd': NDIM = atoi(optarg); break;
-    case 'z': Z = atof(optarg); break;
-    case 'p': PHI0 = atof(optarg); break;
-    case 'u': ETA0 = atof(optarg); break;
-    case 's': SEED = atoi(optarg); break;
-    case 'm': MAXHIST = atoi(optarg); break;
-    case 'v': VERBOSE = true; break;
-    default: die("%s",usage);
+static inline void report_progress(svec_t *x, model_t m) {
+  static double logL_avg = 0;
+  static u32 ncall = 0;
+  static double logZ = 0;
+  ncall++;
+  if (VERBOSE == 1) {
+    if (!(ncall % 1000000)) fputc('.', stderr);
+  } else {
+    if (logZ == 0) logZ = log(Z);
+    assert(x[0] != NULL);
+    double logx = log(((double) x[0]->cnt) / m->n[0]);
+    for (size_t i = m->ntok - 1; i > 0; i--) {
+      if (x[i] == NULL) continue;
+      double logy = log(((double) x[i]->cnt) / m->n[i]);
+      double logp = logx + logy - logZ - d2(x[0]->vec, x[i]->vec, m->ndim);
+      logL_avg += (logp - logL_avg) * (ncall < 1e7 ? 1.0/ncall : 1e-7);
+      //logL_avg = (1.0/ncall) * logp + ((ncall-1.0)/ncall) * logL_avg;
     }
+    if (!(ncall % 1000000)) msg("%dM %g", ncall/1000000, logL_avg);
   }
 }
-
-
-/* This defines a hash table for svec_t and sget(), see dlib.h for details. */
-
-static svec_t svec_new(const char *key) {
-  svec_t s = malloc(sizeof(struct svec_s));
-  s->key = strdup(key);
-  s->cnt = 0;
-  s->vec = rand_unit_vector(NDIM);
-  return s;
-}
-
-#define svec_key(s) ((s)->key)
-#define svec(h,k) (*sget(h,k,true))
-
-D_HASH(s, svec_t, char *, svec_key, d_strmatch, fnv1a, svec_new, d_isnull, d_mknull)
-
 
 /*** main() */
 
 int main(int argc, char **argv) {
   get_options(argc, argv);
-  vmsg("scode-online -d %u -z %g -p %g -u %g -s %lu -m %lu %s",
-       NDIM, Z, PHI0, ETA0, SEED, MAXHIST, (VERBOSE ? "-v " : ""));
+  vmsg_options();
   srand(SEED);
-  darr_t *v = NULL;		// hash tables of embedding vectors
-  darr_t *m = NULL;		// arrays to sample from marginals
+
+  model_t m = NULL;		// scode model
+  darr_t *b = NULL;		// arrays to sample from marginals
   svec_t *x = NULL;		// last tuple read
   char **toks = NULL;		// tokens on last line
-  size_t ntok = 0;		// number of tokens on each line
   size_t len1 = 0;		// strlen of first line
+
+  if (MODEL != NULL) {
+    vmsg("Loading model %s", MODEL);
+    // this loads v, sets ntok, ndim, calculates n, z.
+    m = load_model(MODEL, Z);
+    NTOK = m->ntok; NDIM = m->ndim;
+  }
   
-  forline (line, NULL) {	// Process input
-    line[strlen(line)-1] = 0;	// chop newline
-    if (len1 == 0) {
+  vmsg("Reading stdin (each dot = 1M lines)");
+  forline (line, NULL) {
+    
+    // split line
+    line[strlen(line)-1] = 0;
+    if (toks == NULL) {
       len1 = strlen(line);
-      toks = malloc(len1 * sizeof(char *));
+      toks = _d_malloc(len1 * sizeof(char *));
     }
     size_t n = split(line, "\t", toks, len1);
-    if (ntok == 0) {		// Alloc if first line
-      ntok = n;
-      assert(ntok > 1);
-      x = malloc(ntok * sizeof(svec_t));
-      v = malloc(ntok * sizeof(darr_t));
-      m = malloc(ntok * sizeof(darr_t));
-      for (size_t i = 0; i < ntok; i++) {
-	v[i] = darr(0, svec_t);
-	m[i] = darr(0, svec_t);
-      }
+
+    // alloc if necessary
+    if (x == NULL) { 
+      assert(n > 1);
+      NTOK = n;
+      x = _d_calloc(n, sizeof(svec_t));
+      b = _d_calloc(n, sizeof(darr_t));
+      for (size_t i = 0; i < n; i++)
+	b[i] = darr(0, svec_t);
+      if (m == NULL)
+	m = new_model(n, NDIM);
     }
-    assert(n == ntok);
-    for (size_t i = 0; i < ntok; i++) {
+    assert(n == m->ntok);
+
+    // lookup vectors
+    for (size_t i = 0; i < n; i++) {
       if (*toks[i] == '\0') {
 	x[i] = NULL;
       } else {
-	x[i] = svec(v[i], toks[i]);
+	x[i] = svec(m->v[i], toks[i]);
 	x[i]->cnt++;
+	m->n[i]++;
+	if (x[i]->vec == NULL)
+	  x[i]->vec = rand_unit_vector(m->ndim);
       }
     }
-    scode(x, m, NDIM, ntok);
-  }
 
-  vmsg("Writing...");
-  for (size_t i = 0; i < ntok; i++) { // Print and free
-    forhash (svec_t, sptr, v[i], d_isnull) {
-      svec_t s = *sptr;
-      printf("%zu:%s\t%zu", i, s->key, s->cnt);
-      for (size_t j = 0; j < NDIM; j++) {
-	printf("\t%g", s->vec[j]);
-      }
-      putchar('\n');
-      free(s->key);
-      free(s->vec);
-      free(s);
-    }
-    darr_free(v[i]);
-    darr_free(m[i]);
+    // update vectors
+    scode(x, b);
+    if (VERBOSE) report_progress(x, m);
   }
-  free(v); free(m); free(x); free(toks);
+  if (VERBOSE) fputc('\n', stderr);
+  vmsg("Printing model...");
+  print_model(m);
+  for (size_t i = 0; i < m->ntok; i++) {
+    darr_free(b[i]);
+  }
+  _d_free(b); _d_free(x); _d_free(toks);
+  free_model(m); 
   vmsg("done");
 }
 
