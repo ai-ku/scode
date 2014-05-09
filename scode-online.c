@@ -162,7 +162,7 @@ float *rand_unit_vector(size_t ndim) {
 
 static inline void report_progress(svec_t *x, model_t m) {
   static double logL_avg = 0;
-  static u32 ncall = 0;
+  static u64 ncall = 0;
   static double logZ = 0;
   ncall++;
   if (VERBOSE == 1) {
